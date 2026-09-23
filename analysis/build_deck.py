@@ -93,6 +93,9 @@ F = load("f_ltv_curve")
 G = load("g_repeat_timing")[0]
 H = {r["defn"]: r for r in load("h_churn_definition_sensitivity")}
 I = load("i_status_by_year")
+J = load("j_events_funnel")
+K = load("k_order_placement_test")
+L = {r["segment"]: r for r in load("l_lifecycle_funnel")}
 
 by_month_a = {r["month"]: r for r in A}
 last = A[-1]["month"]                              # last complete month
@@ -190,6 +193,27 @@ d2_post = [fnum(r["pct_orders_over_threshold"]) for r in D2 if r["period"] == "p
 orders_per_quarter = round((n1 + n2) / 2 / 10) * 10
 
 status_complete = st.mean(fnum(r["pct_complete"]) for r in I)
+
+# ---- events & lifecycle funnel -------------------------------------------
+J_full = [r for r in J if int(r["year"]) < int(last[:4])]      # complete years only
+cvr_first = fnum(J_full[0]["naive_session_cvr_pct"])
+cvr_last = fnum(J_full[-1]["naive_session_cvr_pct"])
+c2p_first = fnum(J_full[0]["cart_to_purchase_pct"])
+c2p_last = fnum(J_full[-1]["cart_to_purchase_pct"])
+anon_full = [int(r["anonymous_sessions"]) for r in J_full]
+anon_avg = st.mean(anon_full)
+k_min = min(fnum(r["pct"]) for r in K)
+k_max = max(fnum(r["pct"]) for r in K)
+LA = L["ALL"]
+lc_signup = int(LA["signed_up"])
+lc_order = int(LA["placed_order"]) / lc_signup * 100
+lc_activated = int(LA["activated"]) / lc_signup * 100
+lc_repeat = int(LA["second_order"]) / lc_signup * 100
+lc_seg = [r for k, r in L.items() if k != "ALL"]
+lc_order_rng = (min(fnum(r["signup_to_order_pct"]) for r in lc_seg),
+                max(fnum(r["signup_to_order_pct"]) for r in lc_seg))
+lc_rep_rng = (min(fnum(r["buyer_to_repeat_pct"]) for r in lc_seg),
+              max(fnum(r["buyer_to_repeat_pct"]) for r in lc_seg))
 
 
 # ================================================================= charts
@@ -508,6 +532,62 @@ def chart_status():
     return to_svg(fig)
 
 
+def chart_events():
+    yrs = [r["year"] for r in J_full]
+    anon = [int(r["anonymous_sessions"]) for r in J_full]
+    buy = [int(r["purchase_sessions"]) for r in J_full]
+    cvr = [fnum(r["naive_session_cvr_pct"]) for r in J_full]
+    x = list(range(len(yrs)))
+    fig, axes = plt.subplots(2, 1, figsize=(5.9, 4.9), sharex=True,
+                             gridspec_kw={"height_ratios": [1.5, 1], "hspace": 0.42})
+    ax = axes[0]
+    ax.plot(x, anon, color=INK3, linewidth=2.2)
+    ax.plot(x, buy, color=NEW, linewidth=2.2)
+    ax.set_ylim(0, 75000)
+    ax.set_yticks([0, 25000, 50000, 75000])
+    ax.yaxis.set_major_formatter(lambda v, _: "0" if v == 0 else f"{v / 1000:.0f}K")
+    ax.set_title("Sessions per year", loc="left", fontsize=12, color=INK, pad=6, fontweight="bold")
+    ax.annotate("anonymous \u2014 never buy", (x[-1], anon[-1]), xytext=(0, 7),
+                textcoords="offset points", ha="right", fontsize=10, color=INK2, fontweight="bold")
+    ax.annotate("identified \u2014 always buy", (x[1], buy[1]), xytext=(0, 30),
+                textcoords="offset points", ha="center", fontsize=10, color=NEW, fontweight="bold")
+    ax = axes[1]
+    ax.plot(x, cvr, color=CRIT, linewidth=2.2)
+    ax.scatter([x[0], x[-1]], [cvr[0], cvr[-1]], color=CRIT, s=28, zorder=3)
+    ax.set_ylim(0, 60)
+    ax.set_yticks([0, 20, 40, 60])
+    ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
+    ax.set_title("\u201cConversion\u201d = purchase sessions / all sessions", loc="left",
+                 fontsize=12, color=INK, pad=6, fontweight="bold")
+    ax.annotate(f"{cvr[0]:.1f}%", (x[0], cvr[0]), xytext=(2, 11), textcoords="offset points",
+                fontsize=10, color=CRIT, fontweight="bold")
+    ax.annotate(f"{cvr[-1]:.1f}%", (x[-1], cvr[-1]), xytext=(-6, 6), textcoords="offset points",
+                fontsize=10, color=CRIT, fontweight="bold", ha="right")
+    ax.set_xticks(x)
+    ax.set_xticklabels(yrs)
+    fig.subplots_adjust(left=0.11, right=0.97, top=0.94, bottom=0.08)
+    return to_svg(fig)
+
+
+def chart_placement():
+    dec = [int(r["decile"]) for r in K]
+    pc = [fnum(r["pct"]) for r in K]
+    fig, ax = plt.subplots(figsize=(4.9, 4.9))
+    ax.bar(dec, pc, width=0.74, color=NEW, edgecolor=BG, linewidth=1)
+    ax.axhline(10, color=INK, linewidth=1.2)
+    ax.text(9.45, 10.9, "10% = perfectly uniform", ha="right", fontsize=10, color=INK,
+            fontweight="bold")
+    ax.set_ylim(0, 14)
+    ax.set_yticks([0, 5, 10])
+    ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
+    ax.set_xticks([0, 9])
+    ax.set_xticklabels(["signup", "today"], fontsize=10.5)
+    ax.set_xlabel("where the customer\u2019s only order falls in their lifetime", fontsize=10.5,
+                  color=INK3, labelpad=6)
+    fig.subplots_adjust(left=0.12, right=0.97, top=0.97, bottom=0.15)
+    return to_svg(fig)
+
+
 # ============================================================ data model
 def data_model_svg():
     """Hand-drawn: which tables, their grain, and the exact key each join uses."""
@@ -625,7 +705,8 @@ S.append(slide(
     only a shift of \u2265{mde_pp:.0f} points in the share of orders over $100 would be detectable. The design is right; the sample is not.</li>
 </ol>""",
     f"Completed sale = status \u2018Complete\u2019 and not returned (brief definition). Window: Jan 2019 \u2013 {mlabel(last, True)}; "
-    f"the partial current month and 1,154 future-dated rows are excluded.",
+    f"the partial current month and 1,154 future-dated rows are excluded. "
+    f"Calendar trends partly reflect how theLook generates orders (appendix A3).",
     "exec"))
 
 # ---- 2 financial health ---------------------------------------------------
@@ -762,9 +843,37 @@ S.append(slide(
 </div>""",
     "Source: sql/part1_queries.sql QA.1\u2013QA.4; sql/analysis/h, i."))
 
-# ---- A3 AI -------------------------------------------------------------------
+# ---- A3 funnel -----------------------------------------------------------------
 S.append(slide(
-    "A3", "Appendix \u00b7 AI in this analysis",
+    "A3", "Appendix \u00b7 Funnels",
+    f"The session funnel can\u2019t measure conversion: anonymous traffic is a constant, so "
+    f"\u201cconversion\u201d climbs from {cvr_first:.0f}% to {cvr_last:.0f}% on its own",
+    f"Every identified session ends in a purchase; no anonymous session ever does. Underneath, "
+    f"theLook places each order at a random date between signup and today \u2014 which is also why "
+    f"every calendar trend here rises into the present.",
+    f"""<div class="pair">
+  <figure><figcaption><b>events</b>, by year \u2014 fixed paths, fixed anonymous volume</figcaption>
+    {chart_events()}</figure>
+  <figure><figcaption><b>Order timing test</b> \u2014 {sum(int(r["customers"]) for r in K):,} single-order customers</figcaption>
+    {chart_placement()}</figure>
+</div>
+<aside class="rail slim">
+  <div class="ev"><div class="evl"><b>The funnel this data can support</b> \u2014 user level, accounts \u2265 1 year old</div></div>
+  <div class="lcf">
+    <div><b>100</b><span>signed up</span></div>
+    <div><b>{lc_order:.0f}</b><span>placed an order</span></div>
+    <div><b>{lc_activated:.0f}</b><span>activated \u2014 first completed order</span></div>
+    <div><b>{lc_repeat:.0f}</b><span>placed a second order</span></div>
+  </div>
+  <div class="ev"><div class="evn">\u00b1{(lc_order_rng[1] - lc_order_rng[0]) / 2:.1f} pts</div>
+    <div class="evl">spread across the five acquisition channels. No channel converts or repeats differently.</div></div>
+</aside>""",
+    f"Anonymous sessions average {anon_avg:,.0f} a year (complete years). Single-order customers with accounts "
+    f"\u2265 1 year old: every decile holds {k_min:.1f}\u2013{k_max:.1f}%. Source: sql/analysis/j, k, l."))
+
+# ---- A4 AI -------------------------------------------------------------------
+S.append(slide(
+    "A4", "Appendix \u00b7 AI in this analysis",
     "AI wrote the first draft of every query; a check that could fail decided whether to keep it",
     None,
     """<div class="ai">
@@ -774,7 +883,8 @@ S.append(slide(
   <div class="aic"><div class="aih">Where checks overruled it</div>
     <ul><li>A Task D column was 100% or 0% by construction \u2014 caught, and the query rebuilt at monthly grain</li>
     <li>A 100% churn month \u2014 identified as the edge of the data, not an event</li>
-    <li>\u201cRetention is near zero\u201d \u2014 revised once repeat timing was measured</li></ul></div>
+    <li>\u201cRetention is near zero\u201d \u2014 revised once repeat timing was measured</li>
+    <li>A session funnel showing conversion rising 23\u00d7 \u2014 traced to a constant denominator</li></ul></div>
   <div class="aic"><div class="aih">What I would automate next</div>
     <ul><li>Run the QA queries on a schedule and alert when a check fails, before a dashboard refreshes</li>
     <li>Have an LLM draft the weekly KPI narrative with every figure pulled from SQL, never computed by the model</li>
@@ -834,6 +944,12 @@ figcaption b { color: INK; }
 .takeaways li::before { content: counter(t); position: absolute; left: 0; top: 1px; width: 30px; height: 30px;
   border-radius: 50%; background: INK; color: BG; font-weight: 700; font-size: 15px; display: grid; place-items: center; }
 .takeaways b { color: INK; }
+
+/* lifecycle funnel stack */
+.lcf { display: grid; gap: 8px; }
+.lcf div { display: flex; align-items: baseline; gap: 14px; }
+.lcf b { font-size: 30px; font-weight: 700; letter-spacing: -.02em; width: 58px; text-align: right; flex: none; }
+.lcf span { font-size: 15px; color: INK2; line-height: 1.3; }
 
 /* data model */
 .dm { flex: 1; min-width: 0; display: flex; align-items: center; }

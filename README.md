@@ -34,6 +34,11 @@ showed that is wrong: the 90-day window is ~4.6× shorter than the median repeat
 labels most eventual repeat customers as churned. The slides and this README use the
 corrected reading.
 
+**One caveat to carry through every trend in this repo:** theLook places each order at a
+random date between the customer's signup and today, so calendar trends rise into the
+present partly by construction. Segment-vs-segment comparisons are unaffected. Evidence and
+handling in [§ Funnels](#funnels--stage-definitions-and-why-there-is-no-session-funnel).
+
 **Slides:** [`analysis/deck.pdf`](analysis/deck.pdf) — regenerate with
 `python analysis/build_deck.py`.
 
@@ -229,6 +234,55 @@ place. **89 of 92 months are measurable; the last measurable month is May 2026.*
 
 ---
 
+## Funnels — stage definitions, and why there is no session funnel
+
+The brief allows `events` for funnels (product → cart → purchase). I built that funnel,
+tested it, and **do not use it**, because the table cannot measure conversion
+(`sql/analysis/j_events_funnel.sql`):
+
+- Every **identified** session follows one of four fixed paths and **always** ends in
+  `purchase` — 181,415 sessions, exactly one per `order_items` row.
+- Every **anonymous** session follows one of four abandonment paths and **never** buys —
+  a flat ~65,000 sessions a year, every year.
+
+So session "conversion" is (order volume) ÷ (order volume + a constant). It rises on its own
+as orders grow — from 2.4% in 2019 to 39.9% in 2025, and cart → purchase from 4.6% to 57%.
+Reporting that as a conversion improvement would be the most confident wrong answer
+available in this dataset.
+
+### Why every calendar trend here rises into the present
+
+`sql/analysis/k_order_placement_test.sql` asks, for every customer with exactly one order:
+where does that order fall between the day they signed up and today? Every decile holds
+**9.8–10.2%** of customers — a uniform distribution. theLook creates users at a steady
+~12,600 a year and places each order at a random date between signup and today. Recent
+months therefore always receive orders from every user created so far.
+
+This does not invalidate the exercise — the dataset is synthetic by design, and the tasks
+ask for exactly these views. It changes how to read them: **comparisons across segments in
+the same period are informative; trends across calendar time are partly mechanical.** In a
+real business the equivalent discipline is to compare cohorts of equal age rather than
+calendar months, which is what the cohort heatmap and the LTV curve do.
+
+### The funnel this data does support — user level
+
+`sql/analysis/l_lifecycle_funnel.sql`, accounts at least a year old (84,991 users), so every
+stage has had a full year to happen:
+
+| stage | definition | users | of signups |
+|---|---|---|---|
+| 1. Signed up | `users.created_at` | 84,991 | 100% |
+| 2. Ordered | any order, any status | 67,947 | 80% |
+| 3. Activated | first completed order (the brief's definition) | 23,330 | 27% |
+| 4. Repeat | a second valid order (not cancelled / returned) | 17,225 | 20% |
+
+Two things stand out. Only 34% of customers who order are ever "activated" — the random
+status assignment again, since two-thirds of first orders are labelled Shipped or
+Processing. And **every stage is identical across all five acquisition channels**, to within
+about a point. Nothing in this data distinguishes where a good customer comes from.
+
+---
+
 ## Task D — free shipping over $100 (hypothetical, 2022-01-15)
 
 The policy is not in the data: no `shipping_fee` column, no treatment flag. So nothing here
@@ -283,7 +337,8 @@ sql/
   part1_queries.sql          Part 1: all four tasks + stretch + QA — the deliverable
   tasks/                     the same task queries, one per file, for running
   analysis/                  supporting analyses for Part 2 (retention by channel, LTV,
-                             repeat timing, churn-definition sensitivity, status by year)
+                             repeat timing, churn-definition sensitivity, status by year,
+                             events funnel, order-timing test, lifecycle funnel)
 analysis/
   deck.pdf                   Part 2 slides
   deck.html                  the same deck, viewable in a browser
