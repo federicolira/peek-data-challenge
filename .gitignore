@@ -1,0 +1,23 @@
+# Credentials — the brief is explicit: never commit these.
+*.json
+!analysis/*.json
+.env
+.env.*
+credentials/
+*-key.json
+service-account*.json
+application_default_credentials.json
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Scratch
+*.tmp
+~$*
