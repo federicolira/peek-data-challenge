@@ -1,0 +1,3 @@
+# Only needed to rebuild the slides (analysis/build_deck.py).
+# run_query.py uses the standard library plus an authenticated gcloud CLI.
+matplotlib>=3.8

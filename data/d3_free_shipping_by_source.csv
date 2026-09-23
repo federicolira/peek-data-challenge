@@ -1,0 +1,11 @@
+traffic_source,period,orders,aov,revenue,gross_profit,pct_orders_over_threshold
+Display,pre,24,87.97,2111.22,1123.89,16.67
+Display,post,22,91.49,2012.8,1055.94,31.82
+Email,pre,20,110.46,2209.2,1117.59,55.0
+Email,post,22,115.15,2533.29,1341.3,40.91
+Facebook,pre,34,76.57,2603.36,1347.44,20.59
+Facebook,post,33,79.42,2620.78,1294.12,30.3
+Organic,pre,76,68.28,5189.36,2706.15,18.42
+Organic,post,67,84.3,5648.08,2882.1,26.87
+Search,pre,316,88.58,27990.39,14584.19,26.9
+Search,post,376,88.24,33179.35,17544.02,28.72
