@@ -805,7 +805,7 @@ S.append(slide(
     "2", "Situation · Financial health", f"Revenue +{rev_yoy:.0f}% — driven by volume, not basket",
     f'<div class="chart wide">{chart_financials()}</div>' + rail([
         (f"+{ord_yoy:.0f}%", "orders, year over year"),
-        (f"${min(aov_win):.0f}–${max(aov_win):.0f}", "order value — flat for 2 years"),
+        (f"${min(aov_win):.0f}–${max(aov_win):.0f}", f"average order value — flat for 2 years ({sim_ge_a:.0f}% of single orders top $100)"),
         (f"{money(t12_rev, k=True)}", f"revenue, last 12 months (+{t12_growth:.0f}%)"),
     ]),
     "Task A. Last 24 complete months."))

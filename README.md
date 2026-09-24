@@ -230,6 +230,20 @@ not fail — it returns a confident wrong answer. August 2026 reports **100.0% c
 1,415 active customers: the edge of the dataset, not an event. Task C emits a `measurable`
 flag instead of leaving the trap in the output. **89 of 92 months are measurable.**
 
+### Why don't customers come back? What this data can and can't say
+
+Churn is not new: 90-day churn has been 96–97% every year since 2020 (95% in 2025), per
+`data/c_churn_90d.csv`. To look for a cause, `sql/analysis/p_repeat_drivers.sql` splits
+the 12-month repeat rate (16.2%) by seven attributes of the customer and their first
+order: age, gender, first-order value, items, days to deliver, shipping zone and main
+category. **Every segment sits between 14.5% and 18.0%**, within 2 points of the overall
+rate. With 37 segments compared, a couple of 2-point gaps are what chance alone produces.
+
+Nothing observable here explains churn, which fits a generator that places orders at
+random (`k_order_placement_test.sql`). In a real business the first place I would look is
+the first-order experience: late delivery, a return, a support contact, a first-order
+discount. That is also why recommendation 1 targets **timing**, not a segment.
+
 ### How I would refine it in a real product setting
 
 1. **Size the window from the data.** Report churn on 12 months, and keep the 90-day number
@@ -524,9 +538,10 @@ sql/
   part1_queries.sql     Part 1 — the deliverable: Tasks A–D, cohort stretch, QA.1–QA.4
   tasks/                Tasks A–D one per file, generated from part1_queries.sql
   looker/               curated views behind the Looker Studio dashboard
-  analysis/             supporting analyses e–o (retention by channel, LTV, repeat timing,
+  analysis/             supporting analyses e–p (retention by channel, LTV, repeat timing,
                         churn sensitivity, status by year, events funnel, order-timing test,
-                        lifecycle funnel, 365-day churn, second-order economics, geography)
+                        lifecycle funnel, 365-day churn, second-order economics, geography,
+                        repeat drivers)
 analysis/
   deck.pdf · deck.html  Part 2 slides
   slides/               one PNG per slide

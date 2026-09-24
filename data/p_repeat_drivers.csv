@@ -1,0 +1,38 @@
+attribute,segment,first_time_buyers,repeat_12m_pct,pts_vs_overall
+Age,25-39,10761,16.9,0.7
+Age,40-54,10931,16.5,0.3
+Age,55+,11438,15.9,-0.3
+Age,<25,9423,15.6,-0.6
+Days to deliver,0-2,3635,16.5,0.2
+Days to deliver,3-4,5398,16.9,0.7
+Days to deliver,5+,5207,16.5,0.3
+Days to deliver,not delivered,28313,16.0,-0.2
+First order value,$100-199,7929,16.8,0.5
+First order value,$200+,3770,16.8,0.6
+First order value,$50-99,11299,16.0,-0.3
+First order value,<$50,19555,16.1,-0.2
+Gender,F,21250,16.2,-0.0
+Gender,M,21303,16.3,0.0
+Items in first order,1,29777,16.0,-0.2
+Items in first order,2,8575,16.5,0.3
+Items in first order,3,2118,16.3,0.0
+Items in first order,4+,2083,18.0,1.7
+Main category,Accessories,2063,14.5,-1.7
+Main category,Active,2032,16.8,0.6
+Main category,Dresses,1433,16.7,0.4
+Main category,Fashion Hoodies & Sweatshirts,2769,16.0,-0.2
+Main category,Intimates,2906,15.6,-0.7
+Main category,Jeans,3498,16.9,0.7
+Main category,Maternity,1223,16.5,0.3
+Main category,Outerwear & Coats,2644,16.7,0.5
+Main category,Pants,1757,16.3,0.1
+Main category,Shorts,2577,16.6,0.3
+Main category,Sleep & Lounge,2509,17.0,0.7
+Main category,Socks,1117,17.2,0.9
+Main category,Suits & Sport Coats,1422,15.8,-0.5
+Main category,Sweaters,2784,16.3,0.1
+Main category,Swim,2790,15.4,-0.8
+Main category,Tops & Tees,2653,15.7,-0.5
+Main category,Underwear,1437,15.9,-0.4
+Shipping zone,Domestic (US),9622,16.7,0.5
+Shipping zone,International,32931,16.1,-0.1
