@@ -4,7 +4,10 @@
 --   1. signed_up         users.created_at, account at least 365 days old
 --   2. placed_order      any order, any status
 --   3. activated         first COMPLETED order (the brief's "user activation")
---   4. second_order      a second valid order (not Cancelled / Returned)
+--   4. second_order      ACTIVATED and a second valid order (not Cancelled / Returned).
+--                        Conditioning on stage 3 keeps the funnel nested: an earlier draft
+--                        counted any user with 2+ valid orders, which let a customer whose
+--                        orders were all 'Shipped' reach stage 4 without passing stage 3.
 --
 -- Why user level and not session level: see j_events_funnel.sql.
 -- Why accounts >= 365 days old: every stage then has at least a year to happen,
@@ -36,12 +39,12 @@ SELECT
   COUNT(*)                                                               AS signed_up,
   COUNTIF(any_orders >= 1)                                               AS placed_order,
   COUNTIF(completed_orders >= 1)                                         AS activated,
-  COUNTIF(valid_orders >= 2)                                             AS second_order,
+  COUNTIF(completed_orders >= 1 AND valid_orders >= 2)                   AS second_order,
   ROUND(100 * COUNTIF(any_orders >= 1) / COUNT(*), 1)                    AS signup_to_order_pct,
   ROUND(100 * SAFE_DIVIDE(COUNTIF(completed_orders >= 1),
                           COUNTIF(any_orders >= 1)), 1)                  AS order_to_activated_pct,
-  ROUND(100 * SAFE_DIVIDE(COUNTIF(valid_orders >= 2),
-                          COUNTIF(valid_orders >= 1)), 1)                AS buyer_to_repeat_pct
+  ROUND(100 * SAFE_DIVIDE(COUNTIF(completed_orders >= 1 AND valid_orders >= 2),
+                          COUNTIF(completed_orders >= 1)), 1)            AS activated_to_repeat_pct
 FROM j
 GROUP BY ROLLUP (traffic_source)
 ORDER BY signed_up DESC

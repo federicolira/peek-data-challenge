@@ -1,0 +1,9 @@
+shipping_zone,cohort,period,orders,aov,revenue,gross_profit,avg_shipments_per_order,pct_split_shipment
+domestic,eligible_ge_100,pre,28,201.71,5647.9,2849.24,2.0,64.3
+domestic,eligible_ge_100,post,35,220.81,7728.43,4168.14,1.94,62.9
+domestic,not_eligible,pre,83,45.09,3742.88,1914.23,1.1,9.6
+domestic,not_eligible,post,92,43.32,3985.28,2014.63,1.18,17.4
+international,eligible_ge_100,pre,93,198.53,18463.04,9893.31,2.06,67.7
+international,eligible_ge_100,post,117,191.6,22417.41,11793.27,1.86,55.6
+international,not_eligible,pre,266,46.05,12249.71,6222.49,1.17,15.8
+international,not_eligible,post,276,42.98,11863.18,6141.44,1.17,17.4

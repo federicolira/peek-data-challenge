@@ -1,0 +1,6 @@
+status,not_returned,items,revenue
+Shipped,true,54731,3282436.71
+Complete,true,45373,2702312.16
+Processing,true,36028,2153356.24
+Cancelled,true,27154,1618598.87
+Returned,false,18129,1071383.11

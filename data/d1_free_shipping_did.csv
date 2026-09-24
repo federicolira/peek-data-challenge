@@ -1,4 +1,4 @@
-cohort,period,orders,revenue,aov,gross_profit,gross_margin_pct,avg_units
+cohort,period,orders,revenue,aov,gross_profit,gross_margin_pct,avg_units_per_order
 control_lt_100,pre,349,15992.59,45.82,8136.72,50.88,1.18
 control_lt_100,post,368,15848.46,43.07,8156.07,51.46,1.21
 treated_ge_100,pre,121,24110.94,199.26,12742.55,52.85,2.27

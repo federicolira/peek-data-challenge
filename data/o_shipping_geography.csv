@@ -1,0 +1,3 @@
+basket,orders,pct_international,pct_split_shipment,avg_parcels,avg_km_from_dc,corr_km_transit_days,pct_revenue_international
+ge_100,8553,77.1,59.6,1.92,8082.0,0.0,77.1
+lt_100,22710,77.6,15.7,1.17,8127.0,0.0,77.1

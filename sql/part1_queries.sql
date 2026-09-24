@@ -42,19 +42,25 @@
 --
 --  DATA-BOUNDARY WARNING (applies to every task) — MEASURED, NOT ASSUMED
 --    theLook is continuously generated, so it does not simply "end". Run
---    QA.1 and it reports, as of 2026-09-23:
+--    QA.1 and it reports:
 --
---        first_date         2019-01-10
---        last_date          2026-09-27   <- FOUR DAYS IN THE FUTURE
---        partial_month      2026-09-01
---        future_dated_rows  1,154
+--                         run on 2026-09-23    run on 2026-09-24 (UTC)
+--        first_date       2019-01-10           2019-01-10
+--        last_date        2026-09-27           2026-09-27   <- in the future
+--        partial_month    2026-09-01           2026-09-01
+--        future rows      1,154                632
+--
+--    The future-row count shrinks every day as "today" catches up with rows
+--    the generator dated ahead of time — which is itself the proof that they
+--    are not real sales. data/_as_of.csv records the date the checked-in
+--    outputs were produced (run_all.py regenerates them in one pass).
 --
 --    Two separate problems, and they need two separate guards:
 --
 --    1. The current month is partial. Reporting Sep 2026 beside complete
 --       months manufactures a collapse. Guard: exclude the current month.
 --
---    2. 1,154 rows carry a created_at LATER THAN TODAY. They cannot be
+--    2. Hundreds of rows carry a created_at LATER THAN TODAY. They cannot be
 --       completed sales — nobody has bought anything next Friday. They
 --       are an artifact of the generator. Guard: cap every window at
 --       LEAST(max data date, CURRENT_DATE()).
@@ -76,7 +82,7 @@
 WITH params AS (
   -- Derived, not hard-coded, so this stays correct when theLook refreshes.
   -- max_observable caps at TODAY because the generator emits future-dated
-  -- rows (1,154 of them as of 2026-09-23). A sale dated next week is not
+  -- rows (632 of them on 2026-09-24; see the header). A sale dated next week is not
   -- a sale.
   SELECT
     DATE_TRUNC(DATE(MIN(created_at)), MONTH)                AS first_month,
@@ -245,38 +251,46 @@ completed_orders AS (
     AND DATE(oi.created_at) <= p.max_observable   -- no future-dated sales
 ),
 
-active_by_month AS (
-  SELECT DISTINCT month, user_id
+-- one row per customer per active month, with that month's first purchase
+customer_month AS (
+  SELECT user_id, month, MIN(order_date) AS first_order_in_month
   FROM completed_orders
+  GROUP BY user_id, month
 ),
 
--- For each (customer, active month), did they come back within 90 days
--- of that month ending?
+-- PERFORMANCE NOTE — why LEAD() and not a join.
+-- The obvious way to ask "did this customer buy again within 90 days?" is to
+-- join each (customer, month) back to all of that customer's orders on a date
+-- range. That range self-join grows with orders-per-customer squared.
+-- There is a cheaper equivalent: the customer's NEXT purchase after month M ends
+-- is exactly the first order of their NEXT active month (every later active month
+-- starts after M, and within it the earliest order comes first). One LEAD() over
+-- the customer's months answers the question in a single pass.
+-- Verified: identical output to the range-join version on all 92 months, at
+-- 145 slot-ms instead of 11,152 (77x less compute, uncached).
+with_next AS (
+  SELECT
+    user_id,
+    month,
+    LEAD(first_order_in_month) OVER (PARTITION BY user_id ORDER BY month) AS next_purchase_date
+  FROM customer_month
+),
+
 churn_flag AS (
   SELECT
-    a.month,
-    a.user_id,
-    -- LAST_DAY gives the month end; the window is the 90 days after it.
-    LAST_DAY(a.month, MONTH)                                  AS month_end,
-    MAX(
-      IF(o.order_date >  LAST_DAY(a.month, MONTH)
-         AND o.order_date <= DATE_ADD(LAST_DAY(a.month, MONTH), INTERVAL 90 DAY),
-         1, 0)
-    )                                                          AS returned_within_90d
-  FROM active_by_month AS a
-  LEFT JOIN completed_orders AS o
-    ON  o.user_id    = a.user_id
-    AND o.order_date >  LAST_DAY(a.month, MONTH)
-    AND o.order_date <= DATE_ADD(LAST_DAY(a.month, MONTH), INTERVAL 90 DAY)
-  GROUP BY a.month, a.user_id, month_end
+    month,
+    -- churned: no next purchase at all, or it came after the 90-day window
+    (next_purchase_date IS NULL
+     OR next_purchase_date > DATE_ADD(LAST_DAY(month, MONTH), INTERVAL 90 DAY)) AS churned
+  FROM with_next
 )
 
 SELECT
   c.month,
   COUNT(*)                                                     AS active_customers,
-  COUNTIF(c.returned_within_90d = 0)                           AS churned_customers_90d,
-  ROUND(SAFE_DIVIDE(COUNTIF(c.returned_within_90d = 0),
-                    NULLIF(COUNT(*), 0)) * 100, 2)             AS churn_rate_90d,
+  COUNTIF(c.churned)                                           AS churned_customers_90d,
+  ROUND(SAFE_DIVIDE(COUNTIF(c.churned), NULLIF(COUNT(*), 0)) * 100, 2)
+                                                               AS churn_rate_90d,
   -- TRUE only when the full 90-day observation window exists in the data
   DATE_ADD(LAST_DAY(c.month, MONTH), INTERVAL 90 DAY) <= p.max_observable
                                                                AS measurable
@@ -496,12 +510,18 @@ ORDER BY month;
 
 
 -- ---------------------------------------------------------------------
--- TASK D.3 — the chosen segment: traffic_source.
--- Acquisition channel is the right cut here because shipping cost is a
--- bigger share of a small basket, and channels differ systematically in
--- basket size. If free shipping moves anything, it should move the
--- channels with the smallest baskets first — a testable prediction,
--- which is what separates an analysis from a description.
+-- TASK D.3 — the chosen segment: SHIPPING ZONE (domestic vs international).
+--
+-- Why this segment and not traffic_source: every acquisition channel behaves
+-- identically in this data (conversion, activation and repeat all within ~1
+-- point — sql/analysis/e, l), so a channel cut cannot show anything. The cost
+-- of a free-shipping policy, on the other hand, lives in WHERE orders ship:
+--   * all 10 distribution centres are in the US, yet ~77% of revenue ships
+--     abroad (China alone is ~34%);
+--   * eligible (>= $100) orders ship from ~1.9 distribution centres on
+--     average — a split shipment, i.e. the business would pay for ~2 parcels.
+-- shipments = COUNT(DISTINCT distribution centre) of the order's items, read
+-- from inventory_items (verified 1:1 with order_items), so no extra join.
 -- ---------------------------------------------------------------------
 
 WITH params AS (
@@ -511,10 +531,11 @@ WITH params AS (
 order_level AS (
   SELECT
     oi.order_id,
-    ANY_VALUE(oi.user_id)    AS user_id,
-    DATE(MIN(oi.created_at)) AS order_date,
-    SUM(oi.sale_price)       AS order_revenue,
-    SUM(ii.cost)             AS order_cogs
+    ANY_VALUE(oi.user_id)                                  AS user_id,
+    DATE(MIN(oi.created_at))                               AS order_date,
+    SUM(oi.sale_price)                                     AS order_revenue,
+    SUM(ii.cost)                                           AS order_cogs,
+    COUNT(DISTINCT ii.product_distribution_center_id)      AS shipments
   FROM `bigquery-public-data.thelook_ecommerce.order_items` AS oi
   JOIN `bigquery-public-data.thelook_ecommerce.inventory_items` AS ii
     ON ii.id = oi.inventory_item_id
@@ -524,22 +545,198 @@ order_level AS (
 )
 
 SELECT
-  u.traffic_source,
-  IF(o.order_date >= p.launch_date, 'post', 'pre')              AS period,
-  COUNT(*)                                                      AS orders,
-  ROUND(AVG(o.order_revenue), 2)                                AS aov,
-  ROUND(SUM(o.order_revenue), 2)                                AS revenue,
-  ROUND(SUM(o.order_revenue) - SUM(o.order_cogs), 2)            AS gross_profit,
-  ROUND(SAFE_DIVIDE(COUNTIF(o.order_revenue >= p.thr),
-                    NULLIF(COUNT(*), 0)) * 100, 2)              AS pct_orders_over_threshold
+  IF(u.country = 'United States', 'domestic', 'international')   AS shipping_zone,
+  IF(o.order_revenue >= p.thr, 'eligible_ge_100', 'not_eligible')  AS cohort,
+  IF(o.order_date >= p.launch_date, 'post', 'pre')                 AS period,
+  COUNT(*)                                                         AS orders,
+  ROUND(AVG(o.order_revenue), 2)                                   AS aov,
+  ROUND(SUM(o.order_revenue), 2)                                   AS revenue,
+  ROUND(SUM(o.order_revenue) - SUM(o.order_cogs), 2)               AS gross_profit,
+  ROUND(AVG(o.shipments), 2)                                       AS avg_shipments_per_order,
+  ROUND(SAFE_DIVIDE(COUNTIF(o.shipments > 1), NULLIF(COUNT(*), 0)) * 100, 1)
+                                                                   AS pct_split_shipment
 FROM order_level AS o
 CROSS JOIN params AS p
-LEFT JOIN `bigquery-public-data.thelook_ecommerce.users` AS u
+JOIN `bigquery-public-data.thelook_ecommerce.users` AS u     -- 1:1 per order, after rollup
   ON u.id = o.user_id
 WHERE o.order_date BETWEEN DATE_SUB(p.launch_date, INTERVAL p.window_days DAY)
                        AND DATE_ADD(p.launch_date, INTERVAL p.window_days DAY)
-GROUP BY u.traffic_source, period
-ORDER BY u.traffic_source, period DESC;
+GROUP BY shipping_zone, cohort, period
+ORDER BY shipping_zone, cohort, period DESC;
+
+
+-- ---------------------------------------------------------------------
+-- TASK D.4 — SIMULATED impact, monthly (the brief: "generate the visual as
+-- if there is a noticeable impact").
+--
+-- The policy is not in the data, so its effect is INJECTED here through the
+-- mechanism free-shipping thresholds actually trigger: customers just below
+-- the line add an item to clear it ("threshold bunching"). Every assumption
+-- is a parameter, so the simulation can be re-run at any strength.
+--
+--   near_threshold_floor  orders of $70-$99.99 are within reach of $100
+--   topup_rate            30% of those, post-launch, top up to $100-$120
+--   cost_per_shipment_*   ASSUMED parcel cost; the data has no shipping fees
+--   customers_paid_ship.  assumption: shipping is charged to customers today,
+--                         so the policy moves that cost onto the business
+--
+-- Draws use FARM_FINGERPRINT(order_id), not RAND(): the "random" top-ups are
+-- identical on every run, so the simulated numbers reproduce exactly.
+-- Margin on the added item = the order's own margin ratio.
+-- ---------------------------------------------------------------------
+
+WITH params AS (
+  SELECT
+    DATE '2022-01-15'  AS launch_date,
+    100.0              AS thr,
+    70.0               AS near_threshold_floor,
+    0.30               AS topup_rate,
+    8.00               AS cost_per_shipment_domestic,
+    25.00              AS cost_per_shipment_international
+),
+
+order_level AS (
+  SELECT
+    oi.order_id,
+    ANY_VALUE(oi.user_id)                                  AS user_id,
+    DATE(MIN(oi.created_at))                               AS order_date,
+    SUM(oi.sale_price)                                     AS rev,
+    SUM(ii.cost)                                           AS cogs,
+    COUNT(DISTINCT ii.product_distribution_center_id)      AS shipments
+  FROM `bigquery-public-data.thelook_ecommerce.order_items` AS oi
+  JOIN `bigquery-public-data.thelook_ecommerce.inventory_items` AS ii
+    ON ii.id = oi.inventory_item_id
+  WHERE oi.status = 'Complete'
+    AND oi.returned_at IS NULL
+  GROUP BY oi.order_id
+),
+
+sim AS (
+  SELECT
+    o.*,
+    u.country = 'United States'                                          AS domestic,
+    o.order_date >= p.launch_date                                        AS post,
+    -- two independent, reproducible uniform draws per order
+    MOD(ABS(FARM_FINGERPRINT(CAST(o.order_id AS STRING))), 10000) / 10000.0          AS u1,
+    MOD(ABS(FARM_FINGERPRINT(CONCAT('b', CAST(o.order_id AS STRING)))), 10000) / 10000.0 AS u2,
+    p.*
+  FROM order_level AS o
+  CROSS JOIN params AS p
+  JOIN `bigquery-public-data.thelook_ecommerce.users` AS u ON u.id = o.user_id
+  WHERE o.order_date BETWEEN DATE_SUB(p.launch_date, INTERVAL 12 MONTH)
+                         AND DATE_ADD(p.launch_date, INTERVAL 12 MONTH)
+),
+
+scored AS (
+  SELECT
+    *,
+    (post AND rev >= near_threshold_floor AND rev < thr AND u1 < topup_rate)  AS topped_up,
+    IF(post AND rev >= near_threshold_floor AND rev < thr AND u1 < topup_rate,
+       thr + u2 * 20, rev)                                                    AS sim_rev
+  FROM sim
+),
+
+final AS (
+  SELECT
+    *,
+    cogs * SAFE_DIVIDE(sim_rev, rev)                                           AS sim_cogs,
+    -- the business absorbs every parcel on an eligible post-launch order
+    IF(post AND sim_rev >= thr,
+       shipments * IF(domestic, cost_per_shipment_domestic,
+                                cost_per_shipment_international), 0)           AS shipping_absorbed
+  FROM scored
+)
+
+SELECT
+  DATE_TRUNC(order_date, MONTH)                                        AS month,
+  IF(LOGICAL_OR(post), 'post', 'pre')                                  AS period,
+  COUNT(*)                                                             AS orders,
+  COUNTIF(topped_up)                                                   AS simulated_top_ups,
+  -- actual
+  ROUND(100 * COUNTIF(rev >= thr) / COUNT(*), 2)            AS pct_ge_100_actual,
+  ROUND(AVG(rev), 2)                                                   AS aov_actual,
+  ROUND(SUM(rev), 2)                                                   AS revenue_actual,
+  ROUND(SUM(rev - cogs), 2)                                            AS gross_profit_actual,
+  -- simulated
+  ROUND(100 * COUNTIF(sim_rev >= thr) / COUNT(*), 2)        AS pct_ge_100_sim,
+  ROUND(AVG(sim_rev), 2)                                               AS aov_sim,
+  ROUND(SUM(sim_rev), 2)                                               AS revenue_sim,
+  ROUND(SUM(sim_rev - sim_cogs), 2)                                    AS gross_profit_sim,
+  ROUND(SUM(shipping_absorbed), 2)                                     AS shipping_absorbed_sim,
+  ROUND(SUM(sim_rev - sim_cogs - shipping_absorbed), 2)                AS gross_profit_after_shipping_sim
+FROM final
+GROUP BY month
+ORDER BY month;
+
+
+-- ---------------------------------------------------------------------
+-- TASK D.5 — break-even, by shipping zone, over the 12 months after launch.
+--
+-- The one number leadership can react to: how much can a parcel cost before
+-- the policy destroys more gross profit than it creates?
+--   gain  = gross profit on the ADDED items of topped-up orders
+--   cost  = parcels on every eligible order — including the orders that were
+--           already over $100 and needed no incentive (the "inframarginal"
+--           subsidy, which is where most of the money goes)
+--   break-even cost per parcel = gain / parcels absorbed
+-- Same assumptions and deterministic draws as D.4.
+-- ---------------------------------------------------------------------
+
+WITH params AS (
+  SELECT DATE '2022-01-15' AS launch_date, 100.0 AS thr,
+         70.0 AS near_threshold_floor, 0.30 AS topup_rate
+),
+
+order_level AS (
+  SELECT
+    oi.order_id,
+    ANY_VALUE(oi.user_id)                                  AS user_id,
+    DATE(MIN(oi.created_at))                               AS order_date,
+    SUM(oi.sale_price)                                     AS rev,
+    SUM(ii.cost)                                           AS cogs,
+    COUNT(DISTINCT ii.product_distribution_center_id)      AS shipments
+  FROM `bigquery-public-data.thelook_ecommerce.order_items` AS oi
+  JOIN `bigquery-public-data.thelook_ecommerce.inventory_items` AS ii
+    ON ii.id = oi.inventory_item_id
+  WHERE oi.status = 'Complete'
+    AND oi.returned_at IS NULL
+  GROUP BY oi.order_id
+),
+
+post AS (
+  SELECT
+    IF(u.country = 'United States', 'domestic', 'international')      AS shipping_zone,
+    o.rev, o.cogs, o.shipments, p.thr,
+    (o.rev >= p.near_threshold_floor AND o.rev < p.thr
+     AND MOD(ABS(FARM_FINGERPRINT(CAST(o.order_id AS STRING))), 10000) / 10000.0 < p.topup_rate)
+                                                                        AS topped_up,
+    p.thr + 20 * MOD(ABS(FARM_FINGERPRINT(CONCAT('b', CAST(o.order_id AS STRING)))), 10000)
+                  / 10000.0                                             AS topped_rev
+  FROM order_level AS o
+  CROSS JOIN params AS p
+  JOIN `bigquery-public-data.thelook_ecommerce.users` AS u ON u.id = o.user_id
+  WHERE o.order_date >= p.launch_date
+    AND o.order_date <  DATE_ADD(p.launch_date, INTERVAL 12 MONTH)
+)
+
+SELECT
+  shipping_zone,
+  COUNT(*)                                                                AS orders,
+  COUNTIF(rev >= thr)                                                     AS already_eligible,
+  COUNTIF(topped_up)                                                      AS topped_up,
+  -- gross profit on the added item only (added revenue x the order's margin)
+  ROUND(SUM(IF(topped_up, (topped_rev - rev) * (1 - SAFE_DIVIDE(cogs, rev)), 0)), 2)
+                                                                          AS incremental_gross_profit,
+  SUM(IF(rev >= thr OR topped_up, shipments, 0))                          AS parcels_absorbed,
+  ROUND(SAFE_DIVIDE(SUM(IF(rev >= thr, shipments, 0)),
+                    SUM(IF(rev >= thr OR topped_up, shipments, 0))) * 100, 1)
+                                                                          AS pct_parcels_on_already_eligible,
+  ROUND(SAFE_DIVIDE(
+    SUM(IF(topped_up, (topped_rev - rev) * (1 - SAFE_DIVIDE(cogs, rev)), 0)),
+    SUM(IF(rev >= thr OR topped_up, shipments, 0))), 2)                   AS break_even_cost_per_parcel
+FROM post
+GROUP BY shipping_zone
+ORDER BY shipping_zone;
 
 
 -- =====================================================================
