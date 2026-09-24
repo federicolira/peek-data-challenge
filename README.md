@@ -402,7 +402,8 @@ Tasks A and B on revenue, orders, units and new-customer figures in all 92 month
 ~13 MB.
 
 To deploy the views in your own project: `python deploy_looker_views.py` — it prints a link
-that opens a new Looker Studio report with all six views already attached.
+that opens a new Looker Studio report on `v_sales` (without a template report, the Linking
+API attaches one data source); the other five views are added with *Add data → BigQuery*.
 
 ### Recommendations (slide 6)
 

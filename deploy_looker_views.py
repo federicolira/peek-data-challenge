@@ -36,14 +36,18 @@ def main():
         run(sql)
         print(f"  created {path.stem[3:]}")
 
-    params = {"r.reportName": "Peek - Business Health (theLook)", "c.mode": "edit"}
-    for i, v in enumerate(VIEWS):
-        params.update({f"ds.ds{i}.connector": "bigQuery", f"ds.ds{i}.type": "TABLE",
-                       f"ds.ds{i}.projectId": proj, f"ds.ds{i}.datasetId": dataset,
-                       f"ds.ds{i}.tableId": v, f"ds.ds{i}.billingProjectId": proj})
+    # Linking API: without a template report (c.reportId) only ONE data source can be
+    # attached, with no alias. Aliased sources (ds.ds0.*, ds.ds1.*) are rejected with
+    # "ds0 is not a valid data source alias" unless a template defines those aliases.
+    # So the link opens the report on v_sales; the other views are added in the UI.
+    params = {"r.reportName": "Peek - Business Health (theLook)", "c.mode": "edit",
+              "ds.connector": "bigQuery", "ds.type": "TABLE", "ds.projectId": proj,
+              "ds.datasetId": dataset, "ds.tableId": VIEWS[0], "ds.billingProjectId": proj}
     url = "https://lookerstudio.google.com/reporting/create?" + urllib.parse.urlencode(params)
-    print("\n  Open this link to create the report with all six views attached:\n")
+    print("\n  1. Open this link - it creates the report connected to v_sales:\n")
     print("  " + url)
+    print("\n  2. In the report: Add data > BigQuery > My projects > "
+          f"{proj} > {dataset}, and add: " + ", ".join(VIEWS[1:]))
 
 
 if __name__ == "__main__":
