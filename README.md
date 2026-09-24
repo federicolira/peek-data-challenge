@@ -11,14 +11,16 @@ Outputs in this repo are as of **2026-09-24 UTC** (`data/_as_of.csv`).
 | the brief asks for | where it is |
 |---|---|
 | Runnable SQL for all of Part 1 | [`sql/part1_queries.sql`](sql/part1_queries.sql) — Tasks A–D, the cohort stretch, and 4 QA checks. Each statement runs on its own. |
-| Slides (Part 2) | [`analysis/deck.pdf`](analysis/deck.pdf) — 7 slides + 5 appendix. PNG per slide in [`analysis/slides/`](analysis/slides/). |
-| Assumptions & definitions (churn, active, funnel stages, cohorts) | [§ Definitions](#definitions) · [§ Funnels](#funnels--stage-definitions) |
+| Slides (Part 2) | [`analysis/deck.pdf`](analysis/deck.pdf) — 7 slides + 6 appendix. PNG per slide in [`analysis/slides/`](analysis/slides/). |
+| Dashboard (Looker Studio) | Live report on curated BigQuery views — [§ Dashboard](#dashboard--looker-studio) |
+| Assumptions & definitions (churn, active, funnel stages, cohorts) | [§ Definitions](#definitions) · [§ Funnels](#funnels--stage-definitions) · slide A1 |
 | Date ranges used & why | [§ Date ranges](#date-ranges-and-why) |
 | How to run queries | [§ How to run](#how-to-run) |
 | Churn limitation + refinement (Task C) | [§ Limitations of the 90-day churn](#limitations-of-the-90-day-churn-definition) |
 | Task D assumptions & data needed | [§ Task D](#task-d--free-shipping-over-100) |
-| Questions to address | [§ Answers](#answers-to-the-questions-to-address) — all four |
-| Optional stretches completed | cohort retention heatmap, LTV curve, churn by traffic source (slides 4–5) |
+| Required visuals | revenue & orders MoM (slide 2) · new vs returning mix (3) · churn vs revenue (4) · free shipping impact (7) |
+| Optional stretches | cohort retention heatmap + LTV (slide 5) · churn by traffic source (slide 4) |
+| Questions to address — all four | definitions (slide A1) · leadership trend (slides 3–5) · initiative (slide 6) · KPI dashboard (slide A5 + Looker) · written answers in [§ Answers](#answers-to-the-questions-to-address) |
 | Part 3 — AI | [§ Part 3](#part-3--how-i-used-ai-on-this-challenge) |
 
 ---
@@ -170,6 +172,13 @@ kept for fidelity to the brief.)
 | C — 90-day churn | one row per month + `measurable` flag | 94.2% (last 12 measurable months); last measurable month May 2026 |
 | C stretch — cohort heatmap | cohort × months-since-first | month-1 repeat ~3%, ~1% after |
 | D — Free shipping (hypothetical) | D.1 DiD · D.2 monthly · D.3 shipping zone · D.4 simulation · D.5 break-even | simulated: orders ≥$100 +3.7 pts, gross profit after shipping −26% |
+
+**One Task A subtlety.** The items of an order carry different timestamps (up to ~4 days
+apart), and **572 orders (1.8%) have items in two different months.** Following the brief's
+convention — month from `order_items.created_at` — those orders count once in each month, so
+monthly order counts sum to 1.8% more than total distinct orders. I kept the brief's
+convention so every figure reconciles with it; dating each order once (by its first item or
+the `orders` header) is the alternative if orders must sum across months.
 
 ---
 
@@ -357,7 +366,7 @@ revenue. The first order is 89% of what a customer spends in two years.
   the first repeat order. The shipping offer breaks even at **+1.4 points** of 90-day repeat
   in the US (it would need +15.5 abroad).
 
-### 4. Business-health dashboard (slide A4)
+### 4. Business-health dashboard (slide A5 · live in Looker Studio)
 
 Seven metrics, grouped by the question they answer, plus a data-health strip:
 
@@ -369,8 +378,31 @@ Seven metrics, grouped by the question they answer, plus a data-health strip:
 | Monetization | trailing-12-month revenue, YoY · gross margin |
 | Data health | last complete month · future-dated rows excluded · QA checks passing |
 
-In production: a Looker Studio report on curated BigQuery views, every tile filterable by
-cohort, shipping zone and channel.
+Built as a live Looker Studio report — see [§ Dashboard](#dashboard--looker-studio).
+
+---
+
+## Dashboard — Looker Studio
+
+A self-service report on **curated BigQuery views** (`sql/looker/`), so anyone slicing the
+data inherits the definitions and guards instead of re-deriving them:
+
+| view | grain | holds |
+|---|---|---|
+| `v_sales` | completed line item | revenue, orders, AOV, new/returning — sliceable by month, country, shipping zone, channel, cohort |
+| `v_monthly_kpis` | month | Tasks A–C; churn is **NULL** where its window has not closed, so no chart can plot the false 100% |
+| `v_cohort_retention` | cohort × month | the retention heatmap |
+| `v_cohort_repeat` | cohort | 12-month repeat rate, the north-star metric |
+| `v_lifecycle_funnel` | stage × channel × country | signup → order → activated → second order |
+| `v_data_health` | one row | live QA: as-of date, future rows excluded, fan-out and identity checks |
+
+Every view was reconciled against the Part 1 outputs before building on it: `v_sales` matches
+Tasks A and B on revenue, orders, units and new-customer figures in all 92 months, and
+`v_cohort_repeat` returns the same 16.2% / 4.4% as the analysis. A dashboard query reads
+~13 MB.
+
+To deploy the views in your own project: `python deploy_looker_views.py` — it prints a link
+that opens a new Looker Studio report with all six views already attached.
 
 ### Recommendations (slide 6)
 
@@ -435,51 +467,20 @@ not change a result: anonymous sessions never purchase, and no Part 1 metric use
 
 ## Part 3 — How I used AI on this challenge
 
-I used Claude Code as a pair, not as an oracle.
+**How I used AI**
+- Claude Code as a pair: profiling the tables, first drafts of every query, and the
+  script that builds the slides from the SQL outputs.
 
-- **Reconnaissance first.** Before any analysis, it profiled the seven tables, every join
-  key and every null. That is where the future-dated rows, the 25%-Complete finding and the
-  template-generated events table came from — none of them is in the brief.
-- **Drafting, then arguing.** It drafted the CTE-structured SQL; the cohort-consistent
-  new/returning definition, the `measurable` flag and the `LEAD()` rewrite of Task C came out
-  of challenging those drafts.
-- **Reproducible output.** `analysis/build_deck.py` computes every slide figure from the
-  query outputs, so a re-run cannot leave a stale number on a slide.
+**Example prompt (QA)**
+> "Churn is ~100% for the last three months. Before treating it as real, what at the data
+> boundary could cause it — and write the SQL check that tells an artifact from a real spike."
 
-**Where checks overruled the first draft** — real cases from this challenge:
-
-- **The brief itself.** Text extraction from the PDF silently dropped one sentence — the
-  instruction to generate the free-shipping visual *as if there were a noticeable impact*.
-  Re-reading the complete source recovered it, and Task D was rebuilt around it.
-- **A degenerate column.** Task D.2 computed "% of orders over $100" inside each cohort —
-  100% or 0% by construction. It ran and looked like a metric; checking distinct values
-  caught it.
-- **A non-nested funnel.** The first lifecycle funnel let customers reach "second order"
-  without passing "activated". Requiring each stage to be a subset of the one before fixed it.
-- **A conclusion revised twice.** "Retention is near zero" became "repeat is slow" once the
-  412-day gap was measured, and then "repeat is rare *and* slow" once a 365-day window still
-  showed ~90% churn.
-- **A session funnel showing conversion up 17×** — traced to a constant denominator.
-
-**An example prompt:**
-
-> "The last three months return a churn rate near 100%. Before assuming that is real: what
-> in the data boundary could produce that artefact, and write me the check that would
-> distinguish an artefact from a genuine churn spike."
-
-I did not ask it to fix the query. I asked for *the check that would tell me which
-explanation is true* — an LLM asked to fix something will fix something, whether or not it
-was broken.
-
-**How I validate rather than trust:** row counts before and after every join; identity
-assertions that return rows only on failure; reconciliation to known totals; rewrites
-compared row for row; the same metric under two definitions and two windows; and treating
-anything suspiciously clean — a churn of exactly 100.0% — as a bug until proven otherwise.
-
-**What I would automate next:** run the QA queries on a schedule and alert before a
-dashboard refreshes; have an LLM draft the weekly KPI narrative with every figure pulled
-from SQL, never computed by the model; and point text-to-SQL at curated, documented views
-rather than raw tables, so definitions are fixed upstream.
+**How I validated instead of trusting**
+- Row counts before and after every join (no fan-out).
+- Checks that must return zero rows — e.g. `new + returning = active` every month.
+- The same metric under two definitions; rewrites compared row for row.
+- Caught this way: the "100% churn" months (edge of the data), a Task D column that was
+  100% or 0% by construction, and a session "conversion" rising 17× on a constant denominator.
 
 ---
 
@@ -488,7 +489,8 @@ rather than raw tables, so definitions are fixed upstream.
 ```
 sql/
   part1_queries.sql     Part 1 — the deliverable: Tasks A–D, cohort stretch, QA.1–QA.4
-  tasks/                Tasks A–D one per file, for running individually
+  tasks/                Tasks A–D one per file, generated from part1_queries.sql
+  looker/               curated views behind the Looker Studio dashboard
   analysis/             supporting analyses e–o (retention by channel, LTV, repeat timing,
                         churn sensitivity, status by year, events funnel, order-timing test,
                         lifecycle funnel, 365-day churn, second-order economics, geography)
@@ -499,6 +501,7 @@ analysis/
 data/                   every query output as CSV, plus _as_of.csv
 run_query.py            runs one .sql file against BigQuery
 run_all.py              regenerates every output in data/ in one pass
+deploy_looker_views.py  creates the sql/looker/ views and prints the Looker Studio link
 requirements.txt        matplotlib (deck only; the SQL runners use the standard library)
 ```
 

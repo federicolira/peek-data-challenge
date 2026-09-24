@@ -207,6 +207,7 @@ g_median = int(float(G["median_gap_days_among_repeaters"]))
 one_in = round(100 / g_365)                        # "1 in 6"
 
 src_rep = [fnum(r["repeat_12m_pct"]) for r in E]
+src_churn = [fnum(r["churn_90d_pct"]) for r in E]
 src_buyers = {r["traffic_source"]: int(r["first_time_buyers_12m_obs"]) for r in E}
 search_share = src_buyers["Search"] / sum(src_buyers.values()) * 100
 
@@ -442,23 +443,24 @@ def chart_churn():
 
 
 def chart_sources():
+    """90-day churn by acquisition channel - the brief's 'churn by traffic_source'."""
     src = [r["traffic_source"] for r in E]
     fig, ax = plt.subplots(figsize=(2.9, 2.35))
     ax.grid(axis="x")
     ax.grid(axis="y", visible=False)
     y = list(range(len(src)))
-    ax.scatter(src_rep, y, color=RET, s=44, zorder=3, edgecolor=BG, linewidth=1.5)
-    ax.set_xlim(0, 25)
-    ax.set_xticks([0, 10, 20])
+    ax.scatter(src_churn, y, color=INK, s=44, zorder=3, edgecolor=BG, linewidth=1.5)
+    ax.set_xlim(0, 100)
+    ax.set_xticks([0, 50, 100])
     ax.xaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
     ax.set_yticks(y)
     ax.set_yticklabels(src, fontsize=11)
     ax.set_ylim(len(src) - 0.4, -0.6)
     ax.spines["bottom"].set_visible(False)
-    for yi, v in zip(y, src_rep):
-        ax.annotate(f"{v:.1f}%", (v, yi), xytext=(8, 0), textcoords="offset points",
-                    va="center", fontsize=10.5, color=INK, fontweight="bold")
-    fig.subplots_adjust(left=0.27, right=0.95, top=0.97, bottom=0.13)
+    for yi, v in zip(y, src_churn):
+        ax.annotate(f"{v:.0f}%", (v, yi), xytext=(-8, 0), textcoords="offset points",
+                    va="center", ha="right", fontsize=10.5, color=INK, fontweight="bold")
+    fig.subplots_adjust(left=0.27, right=0.88, top=0.97, bottom=0.13)
     return to_svg(fig)
 
 
@@ -730,10 +732,14 @@ def data_model_svg():
 
 
 # ================================================================= slides
-def slide(n, kicker, title_, sub, body, foot, cls=""):
+# Writing rule for every slide: a short title that IS the takeaway, the chart,
+# at most three evidence numbers, one-line footnote. The talk track carries the
+# rest - the slide only has to tell the reader where to look.
+
+def slide(n, kicker, title_, body, foot, cls="", sub=None):
     return f"""
 <section class="slide {cls}" data-n="{n}">
-  <header class="top"><span class="kick">{kicker}</span><span class="brand"><b>peek</b> \u00b7 DAISY \u00b7 Product &amp; BI Analyst challenge</span></header>
+  <header class="top"><span class="kick">{kicker}</span><span class="brand"><b>peek</b> · DAISY · Product &amp; BI Analyst challenge</span></header>
   <h1>{title_}</h1>
   {f'<p class="sub">{sub}</p>' if sub else ''}
   <div class="body">{body}</div>
@@ -752,252 +758,191 @@ S = []
 # ---- cover ----------------------------------------------------------------------
 S.append(f"""
 <section class="slide cover" data-n="0">
-  <div class="cv-top"><span class="cv-for">Prepared for <span class="cv-logo">peek</span></span><span class="cv-tag">DAISY \u00b7 Data, AI, Strategy &amp; Yield</span></div>
+  <div class="cv-top"><span class="cv-for">Prepared for <span class="cv-logo">peek</span></span><span class="cv-tag">DAISY · Data, AI, Strategy &amp; Yield</span></div>
   <div class="cv-main">
-    <p class="cv-kick">Product &amp; BI Analyst \u2014 data challenge</p>
+    <p class="cv-kick">Product &amp; BI Analyst — data challenge</p>
     <h1 class="cv-h">Growth runs on<br>first purchases</h1>
-    <p class="cv-sub">What {money(t12_rev, k=True)} of trailing revenue says about customers, churn and a
-      free-shipping policy \u2014 and three moves to act on it.</p>
+    <p class="cv-sub">Customers, churn and a free-shipping policy — and three moves to act on it.</p>
   </div>
-  <div class="cv-foot"><span>Federico Lira \u00b7 September 2026</span>
-    <span>theLook e-commerce \u00b7 BigQuery Standard SQL \u00b7 Jan 2019 \u2013 {mlabel(last, True)}</span></div>
+  <div class="cv-foot"><span>Federico Lira · September 2026</span>
+    <span>theLook e-commerce · BigQuery · Jan 2019 – {mlabel(last, True)}</span></div>
 </section>""")
 
 # ---- 1 executive summary -------------------------------------------------------
 S.append(slide(
-    "1", "Executive summary",
-    f"Monthly revenue has doubled in a year \u2014 and {share_new_t12:.0f}% of it comes from people "
-    f"buying for the first time",
-    None,
+    "1", "Executive summary", "Growth runs on first purchases",
     f"""
 <div class="kpis">
   <div class="kpi"><div class="kl">Revenue, {mlabel(last, True)}</div><div class="kn">{money(rev_last, k=True)}</div>
-    <div class="kd up">+{rev_yoy:.0f}% vs {mlabel(same_month_ly, True)}</div></div>
-  <div class="kpi"><div class="kl">Revenue from first-time buyers, last 12 mo</div><div class="kn">{share_new_t12:.0f}%</div>
-    <div class="kd">returning customers: {min(ret_share_range):.0f}\u2013{max(ret_share_range):.0f}% a month</div></div>
-  <div class="kpi"><div class="kl">First-time buyers who return within a year</div><div class="kn">1 in {one_in}</div>
-    <div class="kd">{g_365:.1f}%; those who do take a median {g_median} days</div></div>
-  <div class="kpi"><div class="kl">First order as share of 24-month value</div><div class="kn">{first_order_share:.0f}%</div>
-    <div class="kd">${ltv[0]:.0f} of ${ltv[24]:.0f}</div></div>
+    <div class="kd up">+{rev_yoy:.0f}% year over year</div></div>
+  <div class="kpi"><div class="kl">From first-time buyers</div><div class="kn">{share_new_t12:.0f}%</div>
+    <div class="kd">of revenue, last 12 months</div></div>
+  <div class="kpi"><div class="kl">Buy again within a year</div><div class="kn">1 in {one_in}</div>
+    <div class="kd">median wait: {g_median} days</div></div>
+  <div class="kpi"><div class="kl">Free shipping over $100</div><div class="kn neg">−{abs(sim_gp_chg):.0f}%</div>
+    <div class="kd">gross profit, simulated</div></div>
 </div>
 <div class="twocol">
-  <div><p class="colh">What the data says</p><ol class="takeaways">
-    <li><b>Growth is volume, not basket size.</b> Orders +{ord_yoy:.0f}% year over year; average order value
-      did not grow (${aov_ly:.0f} \u2192 ${aov_last:.0f}).</li>
-    <li><b>Repeat purchase is rare and slow, so growth depends on acquisition</b> \u2014 {search_share:.0f}% of it
-      through one channel, Search.</li>
-    <li><b>Free shipping over $100 would lose money.</b> Simulated, gross profit after shipping falls
-      {abs(sim_gp_chg):.0f}%: {pct_inframarginal:.0f}% of the parcels it pays for go to orders already over $100.</li>
+  <div><p class="colh">What we found</p><ol class="takeaways">
+    <li>Revenue <b>+{rev_yoy:.0f}%</b> — all volume; basket size flat</li>
+    <li><b>{share_new_t12:.0f}%</b> of revenue from first-time buyers; few come back</li>
+    <li>Free shipping over $100 <b>pays for baskets that already exist</b></li>
   </ol></div>
-  <div><p class="colh rec">What I recommend</p><ol class="takeaways recs">
-    <li><b>Win the second purchase in the first 60 days</b>, when repeat peaks. Lifting 12-month repeat by
-      {TARGET_PTS} pts \u2248 {money(rev_target, k=True)} a year.</li>
-    <li><b>Free shipping on the <i>second</i> order, not over $100</b> \u2014 domestic first. Breaks even at
-      +{be_dom:.1f} pts of 90-day repeat.</li>
-    <li><b>Fix measurement before scaling</b>: agree what a \u201csale\u201d is, move churn to 12 months,
-      automate the QA checks.</li>
+  <div><p class="colh rec">What we should do</p><ol class="takeaways recs">
+    <li><b>Win the second purchase</b> in the first 60 days</li>
+    <li><b>Free shipping on the second order</b> — US first</li>
+    <li><b>Fix measurement</b> before scaling decisions</li>
   </ol></div>
 </div>""",
-    f"Completed sale = status \u2018Complete\u2019 and not returned (brief definition). Window: Jan 2019 \u2013 "
-    f"{mlabel(last, True)}; the partial current month and {future_rows:,} future-dated rows are excluded "
-    f"(as of {as_of} UTC). "
-    f"Calendar trends partly reflect how theLook generates orders (appendix A3).", "exec"))
+    f"Completed sales only (brief definition). Jan 2019 – {mlabel(last, True)}; partial month and "
+    f"{future_rows:,} future-dated rows excluded (as of {as_of}).", "exec"))
 
 # ---- 2 financial health ------------------------------------------------------
 S.append(slide(
-    "2", "Situation \u00b7 Financial health",
-    f"Revenue grew {rev_yoy:.0f}% year over year on order volume \u2014 average order value did not grow",
-    f"Trailing-12-month revenue is {money(t12_rev, k=True)}, up {t12_growth:.0f}% on the prior 12 months. "
-    f"The typical month grows {mom_median:.1f}% on the one before.",
+    "2", "Situation · Financial health", f"Revenue +{rev_yoy:.0f}% — driven by volume, not basket",
     f'<div class="chart wide">{chart_financials()}</div>' + rail([
-        (f"+{ord_yoy:.0f}%", f"completed orders, {mlabel(last, True)} vs a year earlier"),
-        (f"${min(aov_win):.0f}\u2013${max(aov_win):.0f}", "range of monthly average order value over two years"),
-        (f"{mom_median:.1f}%", "median month-over-month revenue growth, last 12 months"),
+        (f"+{ord_yoy:.0f}%", "orders, year over year"),
+        (f"${min(aov_win):.0f}–${max(aov_win):.0f}", "order value — flat for 2 years"),
+        (f"{money(t12_rev, k=True)}", f"revenue, last 12 months (+{t12_growth:.0f}%)"),
     ]),
-    "Last 24 complete months. Revenue = SUM(sale_price) of completed line items; orders = COUNT(DISTINCT order_id); "
-    "AOV = revenue / orders. Source: sql/part1_queries.sql, Task A."))
+    "Task A. Last 24 complete months."))
 
 # ---- 3 new vs returning --------------------------------------------------------
 S.append(slide(
-    "3", "Complication \u00b7 Where growth comes from",
-    f"About {round(share_new_t12 / 10):.0f} in 10 revenue dollars every month come from first-time buyers",
-    f"Returning customers are not the problem \u2014 they spend more per head (${ret_per_cust:.0f} vs "
-    f"${new_per_cust:.0f} in {mlabel(last)}). There are just very few of them each month.",
+    "3", "Complication · Revenue mix", f"{share_new_t12:.0f}% of revenue comes from first-time buyers",
     f'<div class="chart wide">{chart_mix()}</div>' + rail([
-        (f"{share_new_t12:.0f}%", "of revenue from first-time buyers, last 12 months"),
-        (f"\u2212{acq_drop_10:.0f}%", "revenue if new customers fell 10% \u2014 there is little repeat base to absorb it"),
-        (f"+{(ret_per_cust / new_per_cust - 1) * 100:.0f}%", "spend per returning customer vs per new customer"),
+        (f"+{(ret_per_cust / new_per_cust - 1) * 100:.0f}%", "spend per returning customer vs new"),
+        (f"−{acq_drop_10:.0f}%", "revenue if new customers fall 10%"),
+        (f"{search_share:.0f}%", "of first-time buyers come from Search"),
     ]),
-    "New = first-ever completed order falls in that month; returning = active, first purchase earlier. "
-    "New + returning = active in all 92 months (QA.4). Source: Task B."))
+    "Task B. New = first completed order that month; new + returning = active in every month (QA.4)."))
 
 # ---- 4 churn vs revenue ----------------------------------------------------------
 S.append(slide(
-    "4", "Complication \u00b7 Churn vs revenue",
-    f"{churn_t12:.0f}% of active customers don\u2019t buy again within 90 days \u2014 and even over a full year, "
-    f"{churn365:.0f}% don\u2019t",
-    "Revenue and churn rise together: the business grows by adding customers, not by keeping them. "
-    "A longer window lowers churn only slightly \u2014 repeat is rare, not just slow.",
+    "4", "Complication · Churn vs revenue", f"Even over a full year, {churn365:.0f}% don’t come back",
     f"""<div class="chart wide">{chart_churn()}</div>
 <aside class="rail">
-  <div class="ev"><div class="evn">{churn90_same:.1f}% \u2192 {churn365:.1f}%</div>
-    <div class="evl">same months ({mlabel(c365_from, True)} \u2013 {mlabel(c365_to, True)}), 90-day vs 365-day window</div></div>
-  <div class="ev"><div class="evn">{churn_brief_h:.1f}% \u2192 {churn_alt:.1f}%</div>
-    <div class="evl">if a \u201cpurchase\u201d includes shipped and processing orders, not only \u2018Complete\u2019</div></div>
-  <div class="ev minich"><div class="evl"><b>12-month repeat rate by channel</b> \u2014 identical everywhere</div>{chart_sources()}</div>
+  <div class="ev"><div class="evn">{churn90_same:.1f}% → {churn365:.1f}%</div><div class="evl">churn at 90 vs 365 days</div></div>
+  <div class="ev"><div class="evn">{churn_brief_h:.1f}% → {churn_alt:.1f}%</div><div class="evl">if all valid orders count, not only ‘Complete’</div></div>
+  <div class="ev minich"><div class="evl"><b>90-day churn by channel</b></div>{chart_sources()}</div>
 </aside>""",
-    f"Churned = active in month M with no completed order in the N days after M ends. The last month with a full 90-day "
-    f"window is {mlabel(last_meas, True)}; computing later months anyway yields {churn_last_unmeasurable:.0f}% for "
-    f"{mlabel(last, True)}. Source: Task C; sql/analysis/e, h, m."))
+    f"Task C. Months after {mlabel(last_meas, True)} have no full 90-day window — computing them anyway shows 100%."))
 
 # ---- 5 why: cohort + LTV ------------------------------------------------------------
 S.append(slide(
-    "5", "Complication \u00b7 Why",
-    f"Only 1 in {one_in} first-time buyers returns within a year \u2014 so the first order is "
-    f"{first_order_share:.0f}% of two-year value",
-    f"Month 1 is the best chance of a second purchase (median {m1_med:.1f}% of a cohort, vs {later_med:.1f}% in "
-    f"months 2\u20138). Those who come back later take a median of {g_median} days.",
+    "5", "Complication · Why", f"The first order is {first_order_share:.0f}% of two-year value",
     f"""<div class="pair">
-  <figure><figcaption><b>Cohort retention</b> \u2014 % of each first-purchase cohort buying again in month N</figcaption>
-    {chart_cohort()}</figure>
-  <figure><figcaption><b>Average cumulative spend per customer</b> \u2014 {ltv_n:,} customers with 24 months of history</figcaption>
-    {chart_ltv()}</figure>
+  <figure><figcaption><b>Cohort retention</b> — % buying again in month N</figcaption>{chart_cohort()}</figure>
+  <figure><figcaption><b>Cumulative spend per customer</b></figcaption>{chart_ltv()}</figure>
 </div>""",
-    "Cohort = customers grouped by the month of their first completed order. Heatmap and LTV use completed orders "
-    "(brief definition); repeat timing uses any non-cancelled, non-returned order (status is random \u2014 appendix A2). "
-    "Source: Task C stretch; sql/analysis/f, g."))
+    f"Task C stretch + LTV. Month 1 is the repeat peak: {m1_med:.1f}% of a cohort vs {later_med:.1f}% after.",
+    sub=f"Month 1 is the best chance of a second purchase."))
 
 # ---- 6 recommendations ----------------------------------------------------------------
 S.append(slide(
-    "6", "Resolution \u00b7 Recommendations",
-    "Three moves: win the second purchase early, point free shipping at it, and fix measurement first",
-    None,
+    "6", "Resolution · Recommendations", "Three moves to build a repeat base",
     f"""<div class="recs3">
-  <div class="rc"><div class="rn">1</div><h3>Win the second purchase in the first 60 days</h3>
-    <p class="rw">Month 1 is when repeat peaks ({m1_med:.1f}% of a cohort vs {later_med:.1f}% later), and returning
-      customers already spend {(ret_per_cust / new_per_cust - 1) * 100:.0f}% more per head.</p>
-    <dl><dt>Target</dt><dd>Every first-time buyer, by <b>moment</b> not channel \u2014 channels behave identically.</dd>
-      <dt>Primary</dt><dd>12-month repeat rate vs a 10\u201320% holdout (today {g_365:.1f}%).</dd>
-      <dt>Secondary</dt><dd>Days to 2nd purchase ({g_median}); share of revenue from returning ({share_ret_t12:.0f}%).</dd>
-      <dt>Guardrail</dt><dd>Incentive cost per incremental order; unsubscribe rate.</dd></dl>
-    <p class="rs">A +{TARGET_PTS}-pt lift ({g_365:.1f}% \u2192 {g_365 + TARGET_PTS:.1f}%) \u2248 <b>{money(rev_target, k=True)}</b>
-      a year, {rev_target_share:.1f}% of revenue \u2014 counting only the first repeat order.</p></div>
-  <div class="rc"><div class="rn">2</div><h3>Free shipping on the <i>second</i> order, not over $100</h3>
-    <p class="rw">Over-$100 free shipping pays for parcels customers were already buying: {pct_inframarginal:.0f}% of them.
-      Only {g_90:.1f}% of buyers repeat within 90 days, so a second-order offer pays mostly for new behaviour.</p>
-    <dl><dt>Target</dt><dd>US first-time buyers first ({dom_rev_share:.0f}% of revenue). Abroad, shipping eats
-      {cost_int / gp_int * 100:.0f}% of an order\u2019s profit \u2014 use a non-shipping incentive.</dd>
-      <dt>Primary</dt><dd>90-day repeat rate vs holdout (today {g_90:.1f}%).</dd>
-      <dt>Guardrail</dt><dd>Gross profit after shipping.</dd></dl>
-    <p class="rs">Breaks even at <b>+{be_dom:.1f} pts</b> of 90-day repeat in the US; would need
-      +{be_int:.1f} abroad.</p></div>
-  <div class="rc"><div class="rn">3</div><h3>Fix measurement before scaling decisions</h3>
-    <p class="rw">\u2018Complete\u2019 samples 25% of orders at random, a 90-day churn window is too short for this repeat cycle,
-      and the session funnel cannot measure conversion.</p>
-    <dl><dt>Do</dt><dd>Agree the revenue-recognition point with finance; report churn on 12 months; ship the QA checks as
-      scheduled tests; publish curated views for self-service and text-to-SQL.</dd>
-      <dt>Measure</dt><dd>QA pass rate, data freshness, share of KPIs on governed definitions.</dd></dl>
-    <p class="rs">Makes 1 and 2 <b>measurable</b> in the first place.</p></div>
+  <div class="rc"><div class="rn">1</div><h3>Win the 2nd purchase in 60 days</h3>
+    <p class="rw">Month 1 is the repeat peak ({m1_med:.1f}% vs {later_med:.1f}%).</p>
+    <dl><dt>Target</dt><dd>All first-time buyers — by timing, not channel</dd>
+      <dt>KPI</dt><dd>12-month repeat vs holdout (today {g_365:.1f}%)</dd>
+      <dt>Guardrail</dt><dd>Incentive cost per extra order</dd></dl>
+    <p class="rs">+{TARGET_PTS} pts ≈ <b>{money(rev_target, k=True)}</b>/yr</p></div>
+  <div class="rc"><div class="rn">2</div><h3>Free shipping on the 2nd order</h3>
+    <p class="rw">Not over $100: {pct_inframarginal:.0f}% of those parcels go to baskets that already exist.</p>
+    <dl><dt>Target</dt><dd>US first-time buyers ({dom_rev_share:.0f}% of revenue)</dd>
+      <dt>KPI</dt><dd>90-day repeat vs holdout (today {g_90:.1f}%)</dd>
+      <dt>Guardrail</dt><dd>Gross profit after shipping</dd></dl>
+    <p class="rs">Breaks even at <b>+{be_dom:.1f} pts</b></p></div>
+  <div class="rc"><div class="rn">3</div><h3>Fix measurement first</h3>
+    <p class="rw">‘Complete’ is a random 25% of orders; 90 days is too short a churn window.</p>
+    <dl><dt>Do</dt><dd>Agree “sale” with finance · 12-month churn · automated QA</dd>
+      <dt>KPI</dt><dd>QA pass rate · data freshness</dd></dl>
+    <p class="rs">Makes 1 and 2 <b>measurable</b></p></div>
 </div>""",
-    f"Sizing: {new_cust_t12:,} first-time buyers in the last 12 months \u00d7 1 pt \u00d7 ${ret_per_cust:.0f} per returning "
-    f"customer; gross margin {margin_t12:.1f}%. Break-even assumes parcels at ${PARCEL_COST['domestic']:.0f} (US) and "
-    f"${PARCEL_COST['international']:.0f} (abroad) \u2014 the data has no shipping costs. Source: sql/analysis/g, n.", "recslide"))
+    f"Sizing: {new_cust_t12:,} first-time buyers/yr × ${ret_per_cust:.0f}. Parcels assumed ${PARCEL_COST['domestic']:.0f} US / "
+    f"${PARCEL_COST['international']:.0f} abroad (no shipping data).", "recslide"))
 
 # ---- 7 free shipping ----------------------------------------------------------------------
 S.append(slide(
-    "7", "Evaluating a product change \u00b7 Free shipping over $100",
-    f"Simulated, free shipping over $100 moves orders over the line \u2014 and cuts gross profit after shipping "
-    f"by {abs(sim_gp_chg):.0f}%",
-    f"The policy is hypothetical, so its effect is injected: 30% of $70\u2013$99 orders top up after launch. Orders "
-    f"over $100 rise from {sim_ge_a:.1f}% to {sim_ge_s:.1f}% and revenue {sim_rev_chg:+.1f}% \u2014 but the business now "
-    f"pays for parcels on every eligible order.",
+    "7", "Product change · Free shipping over $100", "Free shipping over $100 lifts revenue, cuts profit",
     f"""<div class="pair">
-  <figure><figcaption><b>Share of orders over $100</b> \u2014 what the policy is meant to move</figcaption>
-    {chart_sim_share()}</figure>
-  <figure><figcaption><b>Gross profit per month</b> \u2014 after the shipping the policy absorbs</figcaption>
-    {chart_sim_gp()}</figure>
-</div>
-<aside class="rail slim">
-  <div class="ev"><div class="evn">&lt; $1</div><div class="evl">what a parcel may cost before the policy loses money
-    (${be_parcel_dom:.2f} US, ${be_parcel_int:.2f} abroad) \u2014 {pct_inframarginal:.0f}% of parcels go to orders already over $100</div></div>
-  <div class="ev"><div class="evl"><b>How I would test it for real:</b> a randomized holdout. Pre/post cannot separate it from
-    growth, and with ~{orders_per_quarter} orders a quarter only effects \u2265{mde_pp:.0f} pts are detectable.</div></div>
-  <div class="ev"><div class="evl"><b>Data needed:</b> shipping fees and parcel costs, a treatment flag, cart-abandonment
-    events, returns cost.</div></div>
-</aside>""",
-    f"Simulation: sql/part1_queries.sql D.4\u2013D.5, deterministic draws (FARM_FINGERPRINT). Assumes customers pay shipping today and "
-    f"parcels cost ${PARCEL_COST['domestic']:.0f} (US) / ${PARCEL_COST['international']:.0f} (abroad). Eligible orders ship "
-    f"from ~1.9 distribution centres on average \u2014 all in the US, while {int_rev_share:.0f}% of revenue ships abroad (D.3)."))
+  <figure><figcaption><b>Orders over $100</b> — share of all orders</figcaption>{chart_sim_share()}</figure>
+  <figure><figcaption><b>Gross profit per month</b> — after shipping</figcaption>{chart_sim_gp()}</figure>
+</div>""" + rail([
+        (f"{sim_ge_a:.0f}% → {sim_ge_s:.0f}%", "orders over $100"),
+        (f"{sim_rev_chg:+.1f}%", "revenue"),
+        (f"< $1", f"break-even cost per parcel — {pct_inframarginal:.0f}% go to orders already over $100"),
+    ], "slim"),
+    "Task D, simulated (the policy is hypothetical): 30% of $70–99 orders top up after launch. "
+    "Real test: randomized holdout — pre/post can’t separate the policy from growth.",
+    sub=f"Simulated impact: gross profit after shipping −{abs(sim_gp_chg):.0f}%."))
 
-# ---- A1 data model --------------------------------------------------------------------------
+# ---- A1 definitions (question 1) -----------------------------------------------------------
 S.append(slide(
-    "A1", "Appendix \u00b7 Data model",
-    "One fact table and two joins \u2014 each checked to add columns, never rows",
-    None,
+    "A1", "Appendix · Definitions & alternatives", "What each metric means — and when to change it",
+    """<table class="deftab">
+  <thead><tr><th>Metric</th><th>Definition used</th><th>Alternative</th><th>Use the alternative when…</th></tr></thead>
+  <tbody>
+    <tr><td>Churn</td><td>Active in month M, no order in the next 90 days</td><td>12-month window</td><td>Purchases are infrequent (here: median 412 days)</td></tr>
+    <tr><td>Active customer</td><td>≥ 1 completed order in the month</td><td>Active in the last 12 months</td><td>The product is bought once or twice a year</td></tr>
+    <tr><td>New vs returning</td><td>New in the month of the first completed order</td><td>Returning = bought in last 12 months</td><td>The question is reactivation, not acquisition</td></tr>
+    <tr><td>Cohort</td><td>Month of first completed order</td><td>Signup month</td><td>Measuring activation, not repeat</td></tr>
+    <tr><td>Funnel</td><td>Signup → order → activated → 2nd order</td><td>Session: product → cart → purchase</td><td>Session data is real (here it is template-generated)</td></tr>
+    <tr><td>Product-change KPI</td><td>Primary: behaviour targeted · Guardrail: profit after its cost</td><td>Revenue alone</td><td>Never — revenue hid the free-shipping loss</td></tr>
+  </tbody>
+</table>""",
+    "Full definitions and the ‘Complete’ status caveat in README § Definitions.", "defslide"))
+
+# ---- A2 data model --------------------------------------------------------------------------
+S.append(slide(
+    "A2", "Appendix · Data model", "One fact table, two joins, zero fan-out",
     f"""<div class="dm">{data_model_svg()}</div>
 <aside class="rail rules">
-  <div class="rh">Join rules applied</div>
+  <div class="rh">Join rules</div>
   <ol>
-    <li><b>Pick the grain first.</b> order_items is one row per line item, so orders and customers are counted with DISTINCT.</li>
-    <li><b>Count rows before and after every join.</b> inventory_items: 45,373 before, 45,373 after.</li>
-    <li><b>Skip joins that add nothing.</b> order_items already carries the order\u2019s user_id and status (0 mismatches), so orders is never joined.</li>
-    <li><b>Aggregate before joining one-to-many.</b> Task D rolls line items up to one row per order before attaching users.</li>
+    <li><b>Grain first</b> — one row per line item</li>
+    <li><b>Count rows</b> before and after every join</li>
+    <li><b>Skip joins</b> that add no columns (orders)</li>
+    <li><b>Aggregate</b> before one-to-many joins</li>
   </ol>
 </aside>""",
-    "Black = joined in the analysis \u00b7 grey = available, not needed. Every key checked for orphans: 0 line items without "
-    "an order, user, product or stock unit. Parcels per order (Task D) = distinct distribution centres per order, read "
-    "from inventory_items — no extra join."))
+    "Black = joined · grey = not needed. 0 orphan keys. inventory_items: 45,373 rows before and after."))
 
-# ---- A2 data quality ---------------------------------------------------------------------------
+# ---- A3 data quality ---------------------------------------------------------------------------
 S.append(slide(
-    "A2", "Appendix \u00b7 Data quality",
-    "Four things about this data change the numbers, and none of them is in the brief",
-    None,
+    "A3", "Appendix · Data quality", "Four data traps, all handled",
     f"""<div class="pair">
-  <figure><figcaption><b>Order status mix by year of order</b> \u2014 a 2019 order is still \u2018Shipped\u2019 today</figcaption>
-    {chart_status()}</figure>
+  <figure><figcaption><b>Order status by year</b> — a 2019 order is still ‘Shipped’</figcaption>{chart_status()}</figure>
   <div class="dq">
-    <div class="dqi"><div class="dqn">{future_rows:,}</div><div class="dqt"><b>rows dated after today</b> ({as_of}). The count
-      shrinks daily as today catches up \u2014 proof they are ahead of time. Every window caps at today.</div></div>
-    <div class="dqi"><div class="dqn">{status_complete:.0f}%</div><div class="dqt"><b>of line items are \u2018Complete\u2019,</b> the same
-      share every year \u2014 status is random, so the brief\u2019s definition samples a quarter of real orders.</div></div>
-    <div class="dqi"><div class="dqn">{churn_brief_h - churn_alt:.1f} pts</div><div class="dqt"><b>of churn come from that sampling
-      alone</b> ({churn_brief_h:.1f}% vs {churn_alt:.1f}%).</div></div>
-    <div class="dqi"><div class="dqn">0</div><div class="dqt"><b>columns empty, and every null is structural</b> \u2014 e.g. shipped_at is
-      null for exactly the Processing + Cancelled items. events.user_id is 46% null (anonymous sessions); IPs are random
-      per session, so it cannot be backfilled \u2014 and no Part 1 metric uses it.</div></div>
+    <div class="dqi"><div class="dqn">{future_rows:,}</div><div class="dqt"><b>rows dated after today</b> — excluded</div></div>
+    <div class="dqi"><div class="dqn">{status_complete:.0f}%</div><div class="dqt"><b>of items ‘Complete’</b>, every year — status is random</div></div>
+    <div class="dqi"><div class="dqn">3</div><div class="dqt"><b>months with no full churn window</b> — flagged, not reported</div></div>
+    <div class="dqi"><div class="dqn">0</div><div class="dqt"><b>empty columns</b> — every null is structural</div></div>
   </div>
 </div>""",
-    "Source: sql/part1_queries.sql QA.1\u2013QA.4; sql/analysis/h, i; column-level null audit in README \u00a7 Data quality."))
+    "QA.1–QA.4 in sql/part1_queries.sql; null audit in README."))
 
-# ---- A3 funnels -------------------------------------------------------------------------------------
+# ---- A4 funnels -------------------------------------------------------------------------------------
 S.append(slide(
-    "A3", "Appendix \u00b7 Funnels",
-    f"The session funnel can\u2019t measure conversion: anonymous traffic is a constant, so "
-    f"\u201cconversion\u201d climbs from {cvr_first:.0f}% to {cvr_last:.0f}% on its own",
-    "Every identified session ends in a purchase; no anonymous session ever does. Underneath, theLook places each order "
-    "at a random date between signup and today \u2014 which is also why every calendar trend here rises into the present.",
+    "A4", "Appendix · Funnels", "Session data can’t measure conversion",
     f"""<div class="pair">
-  <figure><figcaption><b>events</b>, by year \u2014 fixed paths, fixed anonymous volume</figcaption>
-    {chart_events()}</figure>
-  <figure><figcaption><b>Order timing test</b> \u2014 {sum(int(r["customers"]) for r in K):,} single-order customers</figcaption>
-    {chart_placement()}</figure>
+  <figure><figcaption><b>events</b> — anonymous traffic is a constant</figcaption>{chart_events()}</figure>
+  <figure><figcaption><b>Order timing</b> — orders fall at random between signup and today</figcaption>{chart_placement()}</figure>
 </div>
 <aside class="rail slim">
-  <div class="ev"><div class="evl"><b>The funnel this data can support</b> \u2014 user level, accounts \u2265 1 year old</div></div>
+  <div class="ev"><div class="evl"><b>The funnel we use</b> — per user</div></div>
   <div class="lcf">
     <div><b>100</b><span>signed up</span></div>
-    <div><b>{lc_order:.0f}</b><span>placed an order</span></div>
-    <div><b>{lc_activated:.0f}</b><span>activated \u2014 first completed order</span></div>
-    <div><b>{lc_repeat:.0f}</b><span>placed a second order</span></div>
+    <div><b>{lc_order:.0f}</b><span>ordered</span></div>
+    <div><b>{lc_activated:.0f}</b><span>activated</span></div>
+    <div><b>{lc_repeat:.0f}</b><span>2nd order</span></div>
   </div>
-  <div class="ev"><div class="evn">\u00b1{lc_spread:.1f} pts</div>
-    <div class="evl">spread across the five acquisition channels. No channel converts or repeats differently.</div></div>
+  <div class="ev"><div class="evn">±{lc_spread:.1f} pts</div><div class="evl">across channels</div></div>
 </aside>""",
-    f"Anonymous sessions average {anon_avg:,.0f} a year (complete years). Single-order customers with accounts \u2265 1 year "
-    f"old: every decile holds {k_min:.1f}\u2013{k_max:.1f}%. Source: sql/analysis/j, k, l."))
+    "Accounts ≥ 1 year old. Activated = first completed order (brief definition)."))
 
-# ---- A4 KPI dashboard ---------------------------------------------------------------------------------
+# ---- A5 KPI dashboard ---------------------------------------------------------------------------------
 def hbars(items, color, maxv=None):
     maxv = maxv or max(v for _, v in items)
     return "".join(
@@ -1014,65 +959,47 @@ new_series = [int(by_month_b[m]["new_customers"]) for m in WIN]
 ret_series = [fnum(by_month_b[m]["pct_revenue_from_returning"]) for m in WIN]
 rev_series = [fnum(by_month_a[m]["revenue"]) for m in WIN]
 S.append(slide(
-    "A4", "Appendix \u00b7 Business health dashboard",
-    "Seven metrics, one per question leadership asks \u2014 with the data-health check that makes them trustworthy",
-    None,
+    "A5", "Appendix · Business health dashboard", "Seven metrics leadership should watch",
     f"""<div class="dash">
   <div class="grp"><div class="gh">Acquisition</div>
     <div class="tile"><div class="tl">New customers / month</div><div class="tv">{new_cust_last:,}</div>
-      <div class="sp">{spark(new_series)}</div><div class="td">first completed order that month</div></div>
-    <div class="tile"><div class="tl">Share of first-time buyers from Search</div><div class="tv">{search_share:.0f}%</div>
-      <div class="bars">{channel_bars}</div>
-      <div class="td">concentration risk \u2014 watch, don\u2019t optimize</div></div></div>
+      <div class="sp">{spark(new_series)}</div></div>
+    <div class="tile"><div class="tl">First-time buyers from Search</div><div class="tv">{search_share:.0f}%</div>
+      <div class="bars">{channel_bars}</div></div></div>
   <div class="grp"><div class="gh">Activation</div>
-    <div class="tile"><div class="tl">Signup \u2192 first order</div><div class="tv">{lc_order:.0f}%</div>
-      <div class="bars">{funnel_bars}</div>
-      <div class="td">accounts \u2265 1 year old</div></div></div>
+    <div class="tile"><div class="tl">Signup → first order</div><div class="tv">{lc_order:.0f}%</div>
+      <div class="bars">{funnel_bars}</div></div></div>
   <div class="grp"><div class="gh">Retention</div>
-    <div class="tile hero"><div class="tl">12-month repeat rate \u00b7 north star</div><div class="tv">{g_365:.1f}%</div>
-      <div class="bars">{ladder_bars}</div>
-      <div class="td">first-time buyers who order again \u2014 the window changes the answer, so it is fixed at 12 months</div></div>
-    <div class="tile"><div class="tl">Revenue from returning customers</div><div class="tv">{share_ret_t12:.0f}%</div>
-      <div class="sp">{spark(ret_series, RET)}</div><div class="td">last 12 months</div></div></div>
+    <div class="tile hero"><div class="tl">12-month repeat · north star</div><div class="tv">{g_365:.1f}%</div>
+      <div class="bars">{ladder_bars}</div></div>
+    <div class="tile"><div class="tl">Revenue from returning</div><div class="tv">{share_ret_t12:.0f}%</div>
+      <div class="sp">{spark(ret_series, RET)}</div></div></div>
   <div class="grp"><div class="gh">Monetization</div>
-    <div class="tile"><div class="tl">Revenue, trailing 12 months</div><div class="tv">{money(t12_rev, k=True)}</div>
-      <div class="sp">{spark(rev_series)}</div><div class="td">+{t12_growth:.0f}% YoY \u2014 YoY, not MoM, on a seasonal base</div></div>
-    <div class="tile"><div class="tl">Gross margin</div><div class="tv">{margin_t12:.1f}%</div>
-      <div class="td">after COGS; add shipping once the data exists</div></div></div>
+    <div class="tile"><div class="tl">Revenue, last 12 months</div><div class="tv">{money(t12_rev, k=True)}</div>
+      <div class="sp">{spark(rev_series)}</div></div>
+    <div class="tile"><div class="tl">Gross margin</div><div class="tv">{margin_t12:.1f}%</div></div></div>
 </div>
 <div class="health"><span class="hh">Data health</span>
-  <span>\u2714 last complete month: {mlabel(last, True)}</span><span>\u2714 future-dated rows excluded: {future_rows:,}</span>
-  <span>{"\u2714" if qa_pass == len(qa_checks) else "\u2716"} QA checks passing: {qa_pass} / {len(qa_checks)}</span>
-  <span>\u2714 as of {as_of} UTC</span></div>""",
-    "Values as of the query date. In production this is a Looker Studio report on curated BigQuery views, with every "
-    "tile filterable by cohort, shipping zone and channel.", "dashslide"))
+  <span>✓ last complete month {mlabel(last, True)}</span><span>✓ {future_rows:,} future rows excluded</span>
+  <span>{"✓" if qa_pass == len(qa_checks) else "✗"} QA {qa_pass}/{len(qa_checks)} passing</span><span>✓ as of {as_of}</span></div>""",
+    "Live in Looker Studio on curated BigQuery views (sql/looker/) — filterable by month, zone, channel, country.",
+    "dashslide"))
 
-# ---- A5 AI -------------------------------------------------------------------------------------------------
+# ---- A6 AI -------------------------------------------------------------------------------------------------
 S.append(slide(
-    "A5", "Appendix \u00b7 AI in this analysis",
-    "AI wrote the first draft of every query; a check that could fail decided whether to keep it",
-    None,
-    f"""<div class="ai">
-  <div class="aic"><div class="aih">Where it sped things up</div>
-    <ul><li>Profiling the seven tables, every null and every join key in minutes</li><li>First drafts of CTE-structured SQL for all four tasks</li>
-    <li>Rewriting Task C with LEAD(): identical output, 77\u00d7 less compute</li><li>Generating this deck reproducibly from the query outputs</li></ul></div>
-  <div class="aic"><div class="aih">Where checks overruled it</div>
-    <ul><li>Text extraction silently dropped one sentence of the brief \u2014 re-reading the source recovered it</li>
-    <li>A Task D column was 100% or 0% by construction \u2014 rebuilt at monthly grain</li>
-    <li>A 100% churn month \u2014 the edge of the data, not an event</li>
-    <li>A session funnel showing conversion rising {cvr_last / cvr_first:.0f}\u00d7 \u2014 a constant denominator</li>
-    <li>A funnel that was not nested \u2014 each stage now a strict subset of the one before</li></ul></div>
-  <div class="aic"><div class="aih">What I would automate next</div>
-    <ul><li>Run the QA queries on a schedule and alert before a dashboard refreshes</li>
-    <li>An LLM-drafted weekly KPI narrative, with every figure pulled from SQL, never computed by the model</li>
-    <li>Text-to-SQL over curated, documented views rather than raw tables</li></ul></div>
-  <div class="aic"><div class="aih">Checks that ship with the repo</div>
-    <ul><li>Row counts before and after every join</li><li>Identity assertion: new + returning = active, every month</li>
-    <li>Rewrites verified row-for-row against the original</li><li>Definition sensitivity: churn under two definitions and two windows</li></ul></div>
+    "A6", "Appendix · AI in this analysis", "AI drafted the work; checks decided what stayed",
+    f"""<div class="ai3">
+  <div class="aic"><div class="aih">Used for</div>
+    <ul><li>Profiling tables, nulls and join keys</li><li>First drafts of every query</li><li>This deck, generated from the SQL outputs</li></ul></div>
+  <div class="aic"><div class="aih">Caught by checks</div>
+    <ul><li>100% churn months = edge of the data</li><li>A metric that was 100% or 0% by construction</li>
+    <li>“Conversion” rising {cvr_last / cvr_first:.0f}× on a constant denominator</li></ul></div>
+  <div class="aic"><div class="aih">How I validate</div>
+    <ul><li>Row counts before / after joins</li><li>Identity checks that must return 0 rows</li><li>Same metric, two definitions</li></ul></div>
 </div>
-<p class="prompt"><span>Example prompt</span>\u201cThe last three months return churn near 100%. Before assuming that is real: what in the data
-boundary could produce it, and write the check that would tell an artifact from a genuine spike.\u201d</p>""",
-    "Full write-up in README.md \u00a7 Part 3."))
+<p class="prompt"><span>Example prompt</span>“Churn is ~100% for the last three months. Before treating it as real,
+what at the data boundary could cause it — and write the SQL check that tells an artifact from a real spike.”</p>""",
+    "README § Part 3."))
 
 
 # ================================================================= page
@@ -1209,6 +1136,54 @@ figcaption b { color: INK; }
   padding: 2px 0 2px 20px; max-width: 1300px; }
 .prompt span { display: block; font-style: normal; font-size: 12px; font-weight: 700; letter-spacing: .12em;
   text-transform: uppercase; color: INK3; margin-bottom: 4px; }
+
+
+/* concise-deck overrides */
+h1 { font-size: 42px; margin-bottom: 14px; }
+.kn.neg { color: #b3261e; }
+.takeaways li { font-size: 21px; }
+.twocol { gap: 56px; }
+.rc h3 { font-size: 26px; }
+.rw { font-size: 18px; }
+.rc dl { font-size: 17px; grid-template-columns: 100px 1fr; }
+.rs { font-size: 18px; }
+.rs b { font-size: 26px; }
+.ev .evn { font-size: 34px; }
+.ev .evl { font-size: 16px; }
+.deftab { width: 100%; border-collapse: collapse; font-size: 18px; align-self: flex-start; }
+.deftab th { text-align: left; font-size: 13px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  color: PLUM; border-bottom: 2px solid PLUM; padding: 10px 14px 10px 0; }
+.deftab td { padding: 14px 14px 14px 0; border-bottom: 1px solid RULE; color: INK2; vertical-align: top; line-height: 1.4; }
+.deftab td:first-child { font-family: FH; font-weight: 600; color: INK; white-space: nowrap; }
+.ai3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: RULE; border: 1px solid RULE; }
+.ai3 .aic ul { font-size: 18px; gap: 10px; }
+.slide:has(.ai3) .body { flex-direction: column; gap: 28px; }
+.prompt { font-size: 19px; }
+.dqt { font-size: 18px; }
+.dqn { font-size: 38px; }
+.rules ol { font-size: 17px; gap: 18px; }
+.lcf span { font-size: 16px; }
+.tl { font-size: 14px; }
+
+/* text-only slides: centred, larger */
+.exec .body { justify-content: center; gap: 60px; }
+.exec .kn { font-size: 60px; }
+.exec .kpi { padding: 28px 30px 26px; }
+.exec .takeaways li { font-size: 24px; }
+.exec .takeaways { gap: 24px; }
+.recslide .body { align-items: center; }
+.recs3 { flex: none; width: 100%; }
+.rc { padding: 28px 30px 26px; }
+.rs { margin-top: auto; }
+.rc dl { margin-bottom: 24px; }
+.defslide .body { align-items: center; }
+.deftab { font-size: 21px; }
+.deftab td { padding: 18px 16px 18px 0; }
+.slide:has(.ai3) .body { justify-content: center; gap: 36px; }
+.ai3 .aic { padding: 26px 28px; }
+.ai3 .aic ul { font-size: 21px; gap: 14px; }
+.aih { font-size: 14px; }
+.prompt { font-size: 22px; }
 
 /* single-slide preview mode: deck.html?s=3 */
 body.one .slide { display: none; margin: 0; }
