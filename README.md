@@ -12,7 +12,7 @@ Outputs in this repo are as of **2026-09-24 UTC** (`data/_as_of.csv`).
 |---|---|
 | Runnable SQL for all of Part 1 | [`sql/part1_queries.sql`](sql/part1_queries.sql) — Tasks A–D, the cohort stretch, and 4 QA checks. Each statement runs on its own. |
 | Slides (Part 2) | [`analysis/deck.pdf`](analysis/deck.pdf) — 7 slides + 6 appendix. PNG per slide in [`analysis/slides/`](analysis/slides/). |
-| Dashboard (Looker Studio) | Live report on curated BigQuery views — [§ Dashboard](#dashboard--looker-studio) |
+| Dashboard (Looker Studio) | **[Open the live report](https://lookerstudio.google.com/reporting/3b50d38f-10c2-4c88-9fdd-9f333ec7f126/page/tEnnC)** (view access, no login to BigQuery needed) · PDF export in [`analysis/dashboard.pdf`](analysis/dashboard.pdf) · [§ Dashboard](#dashboard--looker-studio) |
 | Assumptions & definitions (churn, active, funnel stages, cohorts) | [§ Definitions](#definitions) · [§ Funnels](#funnels--stage-definitions) · slide A1 |
 | Date ranges used & why | [§ Date ranges](#date-ranges-and-why) |
 | How to run queries | [§ How to run](#how-to-run) |
@@ -391,6 +391,26 @@ Built as a live Looker Studio report — see [§ Dashboard](#dashboard--looker-s
 ---
 
 ## Dashboard — Looker Studio
+
+**[Open the live report →](https://lookerstudio.google.com/reporting/3b50d38f-10c2-4c88-9fdd-9f333ec7f126/page/tEnnC)**
+· static copy: [`analysis/dashboard.pdf`](analysis/dashboard.pdf)
+
+What is on it, top to bottom:
+
+- **Seven scorecards** for the selected period (default Sep 2025 – Aug 2026): revenue $945,716,
+  orders 10,996, AOV $86.01, % revenue from returning customers 16.4%, **12-month repeat rate
+  16.2% (north star)**, signup → order 79.9%, gross margin 51.8%.
+- **Revenue by customer type**: monthly, new vs returning (required visual).
+- **Churn rate, 90-day vs 365-day**: months whose window has not closed are left blank rather
+  than plotted as a false 100% (required visual).
+- **Cohort retention heatmap**: cohorts Jan 2025 – Feb 2026, months 1–8 since first purchase (stretch).
+- **Lifecycle funnel**: signed up → ordered → activated → repeat buyer, accounts at least a year old.
+- **Data health**: as-of date, last full month, future-dated rows excluded, fan-out and identity checks.
+
+The date and segment controls (shipping zone, traffic source, country) filter the **sales**
+metrics: the scorecards built on `v_sales` and the revenue chart. The repeat rate, churn trend,
+heatmap and funnel keep fixed windows on purpose. A cohort's repeat rate should not change
+because someone narrowed the sales date range.
 
 A self-service report on **curated BigQuery views** (`sql/looker/`), so anyone slicing the
 data inherits the definitions and guards instead of re-deriving them:

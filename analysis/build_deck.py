@@ -46,6 +46,9 @@ OUT = ROOT / "analysis"
 # on every slide that uses them, and the only hand-entered numbers in the deck.
 PARCEL_COST = {"domestic": 8.00, "international": 25.00}
 
+# The live dashboard (slide A5). View link, not /edit.
+LOOKER_URL = "https://lookerstudio.google.com/reporting/3b50d38f-10c2-4c88-9fdd-9f333ec7f126/page/tEnnC"
+
 # ---------------------------------------------------------------- palette
 # Peek Pro brand chrome.
 PLUM, PLUM_DK, PLUM_DEEP, PLUM_TINT = "#a04571", "#8e3978", "#2a1b25", "#f6ecf2"
@@ -982,7 +985,8 @@ S.append(slide(
 <div class="health"><span class="hh">Data health</span>
   <span>✓ last complete month {mlabel(last, True)}</span><span>✓ {future_rows:,} future rows excluded</span>
   <span>{"✓" if qa_pass == len(qa_checks) else "✗"} QA {qa_pass}/{len(qa_checks)} passing</span><span>✓ as of {as_of}</span></div>""",
-    "Live in Looker Studio on curated BigQuery views (sql/looker/) — filterable by month, zone, channel, country.",
+    f'Live in Looker Studio: <a href="{LOOKER_URL}">Peek Business Health report</a> — curated BigQuery views '
+    "(sql/looker/) on the same snapshot as this deck; sales metrics filter by month, zone, channel, country.",
     "dashslide"))
 
 # ---- A6 AI -------------------------------------------------------------------------------------------------
@@ -1031,6 +1035,7 @@ h1 { font-family: FH; font-size: 34px; line-height: 1.2; font-weight: 600; lette
 .foot { display: flex; justify-content: space-between; gap: 40px; align-items: flex-end;
   border-top: 1px solid RULE; margin-top: 12px; padding: 11px 0 18px; font-size: 11.5px; line-height: 1.45; color: INK3; }
 .foot .pg { font-family: FM; font-weight: 600; color: PLUM; }
+.foot a { color: PLUM; font-weight: 600; text-decoration: underline; }
 .pair { flex: 1; display: flex; gap: 34px; min-width: 0; }
 .pair figure { flex: 1; margin: 0; min-width: 0; display: flex; flex-direction: column; }
 figcaption { font-size: 14.5px; color: INK2; margin-bottom: 8px; line-height: 1.35; }
