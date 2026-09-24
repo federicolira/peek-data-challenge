@@ -43,7 +43,7 @@ SELECT a.traffic_source, a.country, s.stage_order, s.stage, s.users
 FROM agg AS a,
 UNNEST([
   STRUCT(1 AS stage_order, '1. Signed up'                          AS stage, a.s1 AS users),
-  STRUCT(2 AS stage_order, '2. Placed an order'                    AS stage, a.s2 AS users),
-  STRUCT(3 AS stage_order, '3. Activated (first completed order)'  AS stage, a.s3 AS users),
-  STRUCT(4 AS stage_order, '4. Second order'                       AS stage, a.s4 AS users)
+  STRUCT(2 AS stage_order, '2. Ordered'                            AS stage, a.s2 AS users),
+  STRUCT(3 AS stage_order, '3. Activated'                          AS stage, a.s3 AS users),
+  STRUCT(4 AS stage_order, '4. Repeat buyer'                       AS stage, a.s4 AS users)
 ]) AS s
