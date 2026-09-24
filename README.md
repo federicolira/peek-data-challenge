@@ -80,11 +80,19 @@ measures both:
 The second guard matters most because it survives the first: a future-dated row can sit
 inside a month that is otherwise complete, where "drop the last month" never sees it.
 
-**Reproducibility note.** `CURRENT_DATE()` is evaluated in UTC, so outputs depend on the
-day they are produced. [`run_all.py`](run_all.py) regenerates every output in one pass and
-records the date in `data/_as_of.csv`; to reproduce a past snapshot exactly, replace
-`CURRENT_DATE()` in the `params` CTEs with that date. The underlying rows did not change
-between runs: Task A is identical row for row across days.
+**Reproducibility — theLook rewrites its own history.** The dataset does not append new
+rows; it **regenerates everything**. On 2026-09-24 at 03:35 UTC every month's revenue
+changed and `order_items` went from 181,415 to 180,925 rows. Numbers computed one day cannot
+be reproduced from the live tables the next. So:
+
+- [`make_snapshot.py`](make_snapshot.py) froze the seven tables with BigQuery time travel
+  (`FOR SYSTEM_TIME AS OF '2026-09-24 00:40 UTC'`, two minutes before `data/` was produced)
+  into `thelook_snapshot`, with the as-of date to use instead of `CURRENT_DATE()`.
+- `python run_all.py --snapshot` re-runs every query against that copy. **All 24 output
+  files come back byte-identical to `data/`** — the deck is reproducible, not just re-runnable.
+- The Looker Studio dashboard reads the same snapshot, so it matches the deck permanently.
+- The SQL files still name `bigquery-public-data.thelook_ecommerce`, as the brief requires;
+  run them live and you get today's regenerated numbers — same patterns, different values.
 
 ---
 
@@ -401,6 +409,10 @@ Tasks A and B on revenue, orders, units and new-customer figures in all 92 month
 `v_cohort_repeat` returns the same 16.2% / 4.4% as the analysis. A dashboard query reads
 ~13 MB.
 
+The views read the frozen snapshot (see [§ Date ranges](#date-ranges-and-why)), so the
+dashboard shows the deck's numbers exactly — e.g. $945,716 revenue for Sep 2025 – Aug 2026
+— and will not drift when theLook regenerates. `--live` deploys them on the public tables.
+
 To deploy the views in your own project: `python deploy_looker_views.py` — it prints a link
 that opens a new Looker Studio report on `v_sales` (without a template report, the Linking
 API attaches one data source); the other five views are added with *Add data → BigQuery*.
@@ -503,6 +515,7 @@ data/                   every query output as CSV, plus _as_of.csv
 run_query.py            runs one .sql file against BigQuery
 run_all.py              regenerates every output in data/ in one pass
 deploy_looker_views.py  creates the sql/looker/ views and prints the Looker Studio link
+make_snapshot.py        freezes theLook with time travel so outputs stay reproducible
 requirements.txt        matplotlib (deck only; the SQL runners use the standard library)
 ```
 

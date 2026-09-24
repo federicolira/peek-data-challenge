@@ -9,8 +9,16 @@ leave the CSVs on two different as-of dates (this happened while building the
 repo: one count moved from 84,991 to 85,017). Running everything together, and
 recording the date, makes data/ a single consistent snapshot.
 
-To pin a past snapshot instead of "today", replace CURRENT_DATE() in the params
-CTEs with a literal date - the one place each query takes its cutoff.
+theLook also REGENERATES its entire history (observed 2026-09-24 03:35 UTC), so the
+live dataset cannot reproduce yesterday's numbers. make_snapshot.py freezes a copy
+with time travel; then
+
+    python run_all.py --snapshot             # read <project>.thelook_snapshot
+    python run_all.py --snapshot --out tmp/  # ...and write somewhere else, to diff
+
+rewrites every query to read the frozen tables and to use the snapshot's as-of date
+in place of CURRENT_DATE(). The SQL files themselves stay on the public dataset, as
+the brief requires; the substitution happens only at run time.
 """
 
 import csv
@@ -19,10 +27,28 @@ import pathlib
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from run_query import run  # noqa: E402
+from run_query import project, run as _run  # noqa: E402
 
 ROOT = pathlib.Path(__file__).parent
 DATA = ROOT / "data"
+if "--out" in sys.argv:
+    DATA = pathlib.Path(sys.argv[sys.argv.index("--out") + 1])
+
+SNAPSHOT = "--snapshot" in sys.argv
+_rewrite = None
+
+
+def run(sql):
+    """Run on the live public dataset, or - with --snapshot - on the frozen copy."""
+    global _rewrite
+    if SNAPSHOT and _rewrite is None:
+        proj = project()
+        _, rows, _ = _run(f"SELECT CAST(as_of_date AS STRING) FROM `{proj}.thelook_snapshot._snapshot_meta`")
+        as_of = rows[0][0]
+        _rewrite = lambda s: (s.replace("`bigquery-public-data.thelook_ecommerce.", f"`{proj}.thelook_snapshot.")
+                               .replace("CURRENT_DATE()", f"DATE '{as_of}'"))
+        print(f"  reading {proj}.thelook_snapshot, as-of {as_of}")
+    return _run(_rewrite(sql) if SNAPSHOT else sql)
 
 # Part 1 statements, in file order, and the CSV each one feeds.
 PART1 = ["a_monthly_financials", "b_new_vs_returning", "c_churn_90d", "c2_cohort_retention",
